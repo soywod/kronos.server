@@ -2,11 +2,7 @@
   "name": "kronos.server",
   "version": "1.0.0",
   "description": "A realtime server for Kronos protocol.",
-  "main": "app.js",
-  "scripts": {
-    "prestart": "npm install --only=prod",
-    "start": "node app.js"
-  },
+  "main": "index.js",
   "repository": {
     "type": "git",
     "url": "git+ssh://git@github.com/kronos-io/kronos.server.git"
@@ -18,6 +14,7 @@
   },
   "homepage": "https://github.com/kronos-io/kronos.server#README",
   "dependencies": {
+    "express": "^4.16.3",
     "rethinkdb": "^2.3.3"
   },
   "devDependencies": {
