@@ -1,0 +1,19 @@
+version: "3"
+
+services:
+  node:
+    build: ./node
+    user: "node"
+    working_dir: /home/node/app
+    command: "npm start"
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./node/app:/home/node/app
+    links:
+      - rethinkdb
+
+  rethinkdb:
+    build: ./rethinkdb
+    volumes:
+      - ./rethinkdb/data:/data

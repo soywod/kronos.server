@@ -1,0 +1,26 @@
+{
+  "name": "kronos.server",
+  "version": "1.0.0",
+  "description": "A realtime server for Kronos protocol.",
+  "main": "app.js",
+  "scripts": {
+    "prestart": "npm install --only=prod",
+    "start": "node app.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/kronos-io/kronos.server.git"
+  },
+  "author": "Clément DOUIN <clement.douin@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/kronos-io/kronos.server/issues"
+  },
+  "homepage": "https://github.com/kronos-io/kronos.server#README",
+  "dependencies": {
+    "rethinkdb": "^2.3.3"
+  },
+  "devDependencies": {
+    "javascript-typescript-langserver": "^2.11.1"
+  }
+}
