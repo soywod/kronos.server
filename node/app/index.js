@@ -86,6 +86,7 @@ async function on_client_data_({conn, client, session_id, raw_data}) {
     const device = await rdb.table("device").get(device_id).run(conn)
     if (! device) throw new Error("invalid-device")
 
+    await connect_device({conn, device_id})
     sessions[session_id] = device_id
 
     return success(client, {user_id, device_id})
@@ -94,21 +95,58 @@ async function on_client_data_({conn, client, session_id, raw_data}) {
   const user   = await rdb.table("user").get(user_id).run(conn)
   const device = await rdb.table("device").get(device_id).run(conn)
 
-  if (! user) throw new Error("invalid-user")
-  if (! device) throw new Error("invalid-device")
+  if (! user)             throw new Error("invalid-user")
+  if (! device)           throw new Error("invalid-device")
   if (! device.connected) throw new Error("device-disconnected")
 
   if (type === "task-list") {
     const cursor = await rdb.table("task").filter({user_id}).run(conn)
-    const tasks = await cursor.toArray()
+    const tasks  = await cursor.toArray()
 
     return success(client, {tasks})
+  }
+
+  if (type === "task-add") {
+    const task = {...validate_task(json_data.task), user_id}
+
+    try {
+      const status = await rdb.table("task").insert(task).run(conn)
+      if (! status.inserted) throw new Error("add-task")
+    } catch (e) {
+      throw e
+    }
+
+    return success(client)
   }
 
   throw new Error("invalid-type")
 }
 
-function success(client, data) {
+function validate_task(obj) {
+  if (! obj) throw new Error("missing-task")
+  if (! obj.id) throw new Error("missing-task-id")
+  if (! obj.desc) throw new Error("missing-task-desc")
+  if (! obj.tags) throw new Error("missing-task-tags")
+  if (typeof obj.id !== "number") throw new Error("invalid-task-id")
+  if (typeof obj.desc !== "string") throw new Error("invalid-task-id")
+  if (obj.tags && ! Array.isArray(obj.tags)) throw new Error("invalid-task-tags")
+  if (obj.active && ! typeof obj.active !== "number") throw new Error("invalid-task-active")
+  if (obj.last_active && ! typeof obj.last_active !== "number") throw new Error("invalid-task-last-active")
+  if (obj.due && ! typeof obj.due !== "number") throw new Error("invalid-task-due")
+  if (obj.done && ! typeof obj.done !== "number") throw new Error("invalid-task-done")
+  if (obj.worktime && ! typeof obj.worktime !== "number") throw new Error("invalid-task-worktime")
+
+  return {
+    ...obj,
+    active: obj.active || 0,
+    last_active: obj.active || 0,
+    due: obj.active || 0,
+    done: obj.active || 0,
+    worktime: obj.active || 0,
+  }
+}
+
+function success(client, data = {}) {
   return client_send(client, {success: true, ...data})
 }
 
