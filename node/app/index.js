@@ -58,15 +58,14 @@ function parse_raw_data(raw_data) {
 
 function on_client_data(params) {
   return async (raw_data) => {
-    const {client, session_id} = params
     const params_ = {...params, raw_data}
 
     try {
       await on_client_data_(params_)
     }
     catch ({message}) {
-      console.warn(session_id, message)
-      error(client, message)
+      console.warn(message)
+      error(params.client, message)
     }
   }
 }
@@ -111,9 +110,27 @@ async function on_client_data_({conn, client, session_id, raw_data}) {
 
     try {
       const status = await rdb.table("task").insert(task).run(conn)
-      if (! status.inserted) throw new Error("add-task")
+      if (! status.inserted) throw new Error("Task not inserted")
     } catch (e) {
-      throw e
+      console.warn(user_id, message)
+      throw new Error("add-task")
+    }
+
+    return success(client)
+  }
+
+  if (type === "task-update") {
+    const task = {...validate_task(json_data.task), user_id}
+
+    if (! await rdb.table("task").get(task.id).run(conn)) {
+      throw new Error("task-not-found")
+    }
+
+    try {
+      await rdb.table("task").get(task.id).update(task).run(conn)
+    } catch ({message}) {
+      console.warn(user_id, message)
+      throw new Error("update-task")
     }
 
     return success(client)
