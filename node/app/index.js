@@ -48,40 +48,64 @@ function on_client_end({conn, session_id}) {
   }
 }
 
-function on_client_data({conn, client, session_id}) {
+function parse_raw_data(raw_data) {
+  try {
+    return JSON.parse(raw_data)
+  } catch(err) {
+    throw new Error("invalid-data")
+  }
+}
+
+function on_client_data(params) {
   return async (raw_data) => {
-    let json_data = null
+    const {client, session_id} = params
+    const params_ = {...params, raw_data}
 
     try {
-      json_data = JSON.parse(raw_data)
-    } catch(err) {
-      return error(client, "invalid-data")
+      await on_client_data_(params_)
     }
-
-    if (! json_data.type) {
-      return error(client, "missing-type")
-    }
-
-    let {type, user_id = "", device_id = ""} = json_data
-
-    switch(type) {
-      case "identification":
-        if (! user_id) user_id = await create_user(conn)
-        const user = await rdb.table("user").get(user_id).run(conn)
-        if (! user) return error(client, "invalid-user")
-
-        if (! device_id) device_id = await create_device({conn, user_id})
-        const device = await rdb.table("device").get(device_id).run(conn)
-        if (! device) return error(client, "invalid-device")
-
-        sessions[session_id] = device_id
-        return success(client, {token: user_id, device: device_id})
-        break
-
-      default:
-        return error(client, "invalid-type")
+    catch ({message}) {
+      console.warn(session_id, message)
+      error(client, message)
     }
   }
+}
+
+async function on_client_data_({conn, client, session_id, raw_data}) {
+  const json_data = parse_raw_data(raw_data)
+
+  let {type, user_id = "", device_id = ""} = json_data
+  if (! type) throw new Error("missing-type")
+
+  if (type === "identification") {
+    if (! user_id) user_id = await create_user(conn)
+    const user = await rdb.table("user").get(user_id).run(conn)
+    if (! user) throw new Error("invalid-user")
+
+    if (! device_id) device_id = await create_device({conn, user_id})
+    const device = await rdb.table("device").get(device_id).run(conn)
+    if (! device) throw new Error("invalid-device")
+
+    sessions[session_id] = device_id
+
+    return success(client, {user_id, device_id})
+  }
+
+  const user   = await rdb.table("user").get(user_id).run(conn)
+  const device = await rdb.table("device").get(device_id).run(conn)
+
+  if (! user) throw new Error("invalid-user")
+  if (! device) throw new Error("invalid-device")
+  if (! device.connected) throw new Error("device-disconnected")
+
+  if (type === "task-list") {
+    const cursor = await rdb.table("task").filter({user_id}).run(conn)
+    const tasks = await cursor.toArray()
+
+    return success(client, {tasks})
+  }
+
+  throw new Error("invalid-type")
 }
 
 function success(client, data) {

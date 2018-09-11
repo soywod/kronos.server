@@ -8,6 +8,8 @@ services:
     ports:
       - "5000:5000"
     user: "node"
+    volumes:
+      - ./node/app/index.js:/home/node/index.js
 
   rethinkdb:
     build: ./rethinkdb
