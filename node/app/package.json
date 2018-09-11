@@ -14,8 +14,8 @@
   },
   "homepage": "https://github.com/kronos-io/kronos.server#README",
   "dependencies": {
-    "express": "^4.16.3",
-    "rethinkdb": "^2.3.3"
+    "rethinkdb": "^2.3.3",
+    "uuid": "^3.3.2"
   },
   "devDependencies": {
     "javascript-typescript-langserver": "^2.11.1"
