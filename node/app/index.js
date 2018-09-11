@@ -136,6 +136,21 @@ async function on_client_data_({conn, client, session_id, raw_data}) {
     return success(client)
   }
 
+  if (type === "task-delete") {
+    const {task_id} = json_data
+    if (typeof task_id !== "number") throw new Error("invalid-task-id")
+
+    try {
+      const status = await rdb.table("task").get(task_id).delete().run(conn)
+      if (! status.deleted) throw new Error("Task not deleted")
+    } catch (e) {
+      console.warn(user_id, message)
+      throw new Error("delete-task")
+    }
+
+    return success(client)
+  }
+
   throw new Error("invalid-type")
 }
 
