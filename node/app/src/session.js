@@ -2,9 +2,9 @@ const uuid = require("uuid").v4
 
 const sessions = {}
 
-// ------------------------------------------------------------ // Public API //
+// -------------------------------------------------------------- # Public API #
 
-function add() {
+function create() {
   const session_id = uuid()
   sessions[session_id] = null
   return session_id
@@ -21,7 +21,7 @@ function delete_(session_id) {
 }
 
 module.exports = {
-  add,
+  create,
   update,
   delete_,
 }
