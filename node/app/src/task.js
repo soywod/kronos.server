@@ -42,9 +42,32 @@ async function delete_(conn, task_id) {
   }
 }
 
+async function watch({conn, client, user_id, device_id, on_change}) {
+  await rdb
+    .table("task")
+    .filter({user_id})
+    .changes()
+    .run(conn, (err, cursor) => {
+      if (err) throw new Error("task-fail-watch")
+
+      cursor.each((err, changes) => {
+        if (err) throw new Error("task-fail-watch")
+
+        if (! changes.old_val) {
+          on_change({type: "add", task: changes.new_val})
+        } else if (! changes.new_val) {
+          on_change({type: "delete", task: changes.old_val})
+        } else {
+          on_change({type: "update", task: changes.new_val})
+        }
+      })
+    })
+}
+
 module.exports = {
   list,
   add,
   update,
   delete_,
+  watch,
 }

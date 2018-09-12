@@ -71,11 +71,12 @@ async function on_client_data_({conn, client, session_id, raw_data}) {
   if (! type) throw new Error("missing-data-type")
 
   if (type === "login") {
-    return await login({conn, client, user_id, device_id, session_id})
+    await login({conn, client, user_id, device_id, session_id})
+    return await watch({conn, client, user_id, device_id})
   }
 
-  const user   = await $user.read(conn, user_id)
-  const device = await $device.read(conn, device_id)
+  await $user.read(conn, user_id)
+  await $device.read(conn, device_id)
 
   switch (type) {
     case "list":
@@ -89,6 +90,13 @@ async function on_client_data_({conn, client, session_id, raw_data}) {
     default:
       throw new Error("invalid-data-type")
   }
+}
+
+async function watch(params) {
+  const {client} = params
+  const on_change = data => send_success(client, data)
+
+  await $task.watch({...params, on_change})
 }
 
 async function list({conn, client, user_id}) {
