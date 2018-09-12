@@ -9,7 +9,7 @@ services:
       - "5000:5000"
     user: "node"
     volumes:
-      - ./node/app/index.js:/home/node/index.js
+      - ./node/app/src:/home/node/src
 
   rethinkdb:
     build: ./rethinkdb

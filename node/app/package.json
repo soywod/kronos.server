@@ -2,7 +2,7 @@
   "name": "kronos.server",
   "version": "1.0.0",
   "description": "A realtime server for Kronos protocol.",
-  "main": "index.js",
+  "main": "src/index.js",
   "repository": {
     "type": "git",
     "url": "git+ssh://git@github.com/kronos-io/kronos.server.git"
