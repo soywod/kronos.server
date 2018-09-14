@@ -45,7 +45,7 @@ async function update(conn, task) {
 async function delete_(conn, task_id, user_id) {
   const query = rdb
     .table("task")
-    .get(with_index({id: task_id, user_id}))
+    .get(with_index({id: task_id, user_id}).index)
 
   if (! await query.run(conn)) {
     throw new Error("task not found")

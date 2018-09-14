@@ -18,7 +18,7 @@ function start(conn) {
 }
 
 function on_error(e) {
-  throw e
+  console.error(e)
 }
 
 module.exports = {
