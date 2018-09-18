@@ -7,7 +7,7 @@ async function create(conn) {
   const id = uuid()
   const status = await rdb
     .table("user")
-    .insert({id, version: Date.now()})
+    .insert({id, version: 0})
     .run(conn)
 
   if (! status.inserted) {

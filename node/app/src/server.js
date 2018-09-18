@@ -1,20 +1,25 @@
-const create_server = require("net").createServer
+const create_tcp_server = require("net").createServer
 const uuid = require("uuid").v4
+const create_hash = require("crypto").createHash
+
+const tcp = require('./tcp')
+const ws  = require('./ws')
 
 const $task    = require("./task")
 const $user    = require("./user")
 const $device  = require("./device")
-const $session = require("./session")
+
+const session = require("./session")
 
 const port = 5000 || process.env.PORT
 
 // -------------------------------------------------------------- # Public API #
 
 function start(conn) {
-  const server = create_server(on_create_server(conn))
+  const tcp_server = create_tcp_server(on_create_server(conn))
 
-  server.on("error", on_error)
-  server.listen(port, on_listen)
+  tcp_server.on("error", on_error)
+  tcp_server.listen(port, on_listen)
 }
 
 function on_error(e) {
@@ -30,7 +35,7 @@ module.exports = {
 
 function on_create_server(conn) {
   return (client) => {
-    const session_id = $session.create()
+    const session_id = session.create()
     console.log(`New session "${session_id}"`)
 
     const params = {conn, client, session_id}
@@ -41,7 +46,7 @@ function on_create_server(conn) {
 
 function on_client_end({conn, session_id}) {
   return async () => {
-    const device_id = $session.delete_(session_id)
+    const device_id = session.delete_(session_id)
     console.log(`End session "${session_id}"`)
 
     if (device_id) {
@@ -52,13 +57,14 @@ function on_client_end({conn, session_id}) {
 }
 
 function on_client_data(params) {
+  const {client, session_id} = params
   return async (raw_data) => {
     const params_ = {...params, raw_data}
 
     try {
       await on_client_data_(params_)
     } catch (e) {
-      send_error(params.client, e.message)
+      send_error(client, session_id, e.message)
       console.warn(e.message)
     }
   }
@@ -66,20 +72,35 @@ function on_client_data(params) {
 
 async function on_client_data_({conn, client, session_id, raw_data}) {
   const data = parse_raw_data(raw_data)
+  if (! data.type) throw new Error('missing data type')
+
   const {type, user_id, device_id, task, tasks, task_id, version} = data
 
-  if (! type) throw new Error("missing data type")
+  if (data.type === 'handshake') {
+    session.enable_ws(session_id)
 
-  if (type === "login") {
+    const response = [
+      'HTTP/1.1 101 Switching Protocols',
+      'Upgrade: websocket',
+      'Connection: Upgrade',
+      'Sec-WebSocket-Accept: ' + data.key,
+      '',
+      '',
+    ]
+
+    return client.write(response.join('\r\n'))
+  }
+
+  if (data.type === "login") {
     const {user, device}
       = await login({conn, client, user_id, device_id, session_id})
 
-    return await watch({conn, client, user, device})
+    return await watch({conn, client, session_id, user, device})
   }
 
   switch (type) {
     case "read-all":
-      return await read_all({conn, client, user_id})
+      return await read_all({conn, client, session_id, user_id})
     case "write-all":
       return await write_all({conn, user_id, tasks, version})
     case "create":
@@ -93,18 +114,22 @@ async function on_client_data_({conn, client, session_id, raw_data}) {
   }
 }
 
+function parse_raw_data(raw_data) {
+  return tcp.parse(raw_data) || ws.parse(raw_data) || {}
+}
+
 async function watch(params) {
-  const {client} = params
+  const {client, session_id} = params
   const on_change = data => {
-    send_success(client, data)
+    send_success(client, session_id, data)
   }
 
   await $task.watch({...params, on_change})
 }
 
-async function read_all({conn, client, user_id}) {
+async function read_all({conn, client, session_id, user_id}) {
   const tasks = await $task.read_all(conn, user_id)
-  return send_success(client, {type: "read-all", tasks})
+  return send_success(client, session_id, {type: "read-all", tasks})
 }
 
 async function write_all({conn, user_id, tasks, version}) {
@@ -143,9 +168,9 @@ async function login(params) {
   const device = await $device.read(conn, device_id)
 
   await $device.connect(conn, device_id)
-  $session.update(session_id, device_id)
+  session.set_device(session_id, device_id)
 
-  send_success(client, {
+  send_success(client, session_id, {
     type: "login",
     user_id,
     device_id,
@@ -153,23 +178,6 @@ async function login(params) {
   })
 
   return {user, device}
-}
-
-function parse_raw_data(raw_data) {
-  try {
-    const data = JSON.parse(raw_data)
-    return {
-      ...data,
-      task: data.task || {},
-      tasks: data.tasks || [],
-      version: data.version || Date.now(),
-      task_id: data.task_id || 0,
-      user_id: data.user_id || "",
-      device_id: data.device_id || "",
-    }
-  } catch (e) {
-    throw new Error("invalid data")
-  }
 }
 
 function parse_task_id(id) {
@@ -209,18 +217,22 @@ function parse_task(obj) {
   }
 }
 
-function send_success(client, data = {}) {
-  return send(client, {success: true, ...data})
+function send_success(client, session_id, data = {}) {
+  return send(client, session_id, {success: true, ...data})
 }
 
-function send_error(client, error) {
-  return send(client, {success: false, error})
+function send_error(client, session_id, error) {
+  return send(client, session_id, {success: false, error})
 }
 
-function send(client, data) {
-  return client.write(JSON.stringify(data) + "\n")
+function send(client, session_id, data) {
+  const response = session.ws_enabled(session_id)
+    ? ws.format(data)
+    : tcp.format(data)
+
+  return client.write(response)
 }
 
 function on_listen() {
-  console.log(`Kronos server listening on port ${port}...`)
+  console.log(`Kronos TCP server listening on port ${port}...`)
 }
