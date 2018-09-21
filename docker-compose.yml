@@ -3,6 +3,8 @@ version: "3"
 services:
   node:
     build: ./node
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
     links:
       - rethinkdb
     ports:

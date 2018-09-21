@@ -2,7 +2,7 @@
   "name": "kronos.server",
   "version": "1.0.0",
   "description": "A realtime server for Kronos protocol.",
-  "main": "src/index.js",
+  "main": "src/index.ts",
   "repository": {
     "type": "git",
     "url": "git+ssh://git@github.com/kronos-io/kronos.server.git"
@@ -12,12 +12,17 @@
   "bugs": {
     "url": "https://github.com/kronos-io/kronos.server/issues"
   },
-  "homepage": "https://github.com/kronos-io/kronos.server#README",
+  "homepage": "https://github.com/kronos-io/kronos.server",
   "dependencies": {
     "rethinkdb": "^2.3.3",
     "uuid": "^3.3.2"
   },
   "devDependencies": {
-    "javascript-typescript-langserver": "^2.11.1"
+    "@types/rethinkdb": "^2.3.13",
+    "javascript-typescript-langserver": "^2.11.1",
+    "soywod-tslint-rules": "^1.0.5",
+    "ts-node-dev": "^1.0.0-pre.30",
+    "tslint": "^5.11.0",
+    "tslint-language-service": "^0.9.9"
   }
 }

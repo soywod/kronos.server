@@ -3,6 +3,9 @@ WORKDIR /home/node
 
 COPY app/package.json .
 COPY app/package-lock.json .
-RUN npm install --only=prod
+RUN npm install
 
-CMD node src/index.js
+COPY app/tsconfig.json .
+COPY app/tslint.json .
+COPY app/start.sh .
+CMD sh start.sh

@@ -1,0 +1,23 @@
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    "allowSyntheticDefaultImports": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "module": "CommonJS",
+    "target": "ES6",
+    "moduleResolution": "Node",
+    "outDir": "./dist",
+    "plugins": [{
+      "name": "tslint-language-service"
+    }],
+    "rootDir": "src",
+    "sourceMap": true,
+    "strict": true
+  },
+  "exclude": [
+    ".git/",
+    "dist/",
+    "node_modules/"
+  ]
+}

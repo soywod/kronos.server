@@ -1,0 +1,8 @@
+{
+  "extends": "soywod-tslint-rules",
+  "rules": {
+    "eofline": false,
+    "arrow-parens": false,
+    "curly": false
+  }
+}
