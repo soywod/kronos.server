@@ -7,5 +7,5 @@ RUN npm install
 
 COPY app/tsconfig.json .
 COPY app/tslint.json .
-COPY app/start.sh .
-CMD sh start.sh
+
+CMD npm run start:${NODE_ENV}

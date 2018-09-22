@@ -234,5 +234,5 @@ function send(client, session_id, data) {
 }
 
 function on_listen() {
-  console.log(`Kronos TCP server listening on port ${port}...`)
+  console.log(`Kronos server listening on port ${port}...`)
 }
