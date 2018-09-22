@@ -4,7 +4,7 @@ const {start, on_error} = require('./server')
 
 const params = {
   db: 'kronos',
-  host: 'rethinkdb',
+  host: 'database',
 }
 
 connect(params)

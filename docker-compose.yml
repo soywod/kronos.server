@@ -1,21 +1,24 @@
 version: "3"
 
 services:
-  node:
-    build: ./node
-    environment:
-      - NODE_ENV=${NODE_ENV:-development}
+  server:
+    build:
+      context: server
+      dockerfile: Dockerfile.${NODE_ENV:-development}
+    container_name: kronos-server
+    image: kronos-server-${NODE_ENV:-development}
     links:
-      - rethinkdb
+      - database
     ports:
       - "5000:5000"
-    user: "node"
     volumes:
-      - ./node/app/src:/home/node/src
+      - ./server/app:/home/node
 
-  rethinkdb:
-    build: ./rethinkdb
+  database:
+    build: database
+    container_name: kronos-database
+    image: kronos-database
     ports:
       - "8080:8080"
     volumes:
-      - ./rethinkdb/data:/data
+      - ./database/data:/data

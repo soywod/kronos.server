@@ -1,24 +1,20 @@
 {
   "name": "kronos.server",
+  "main": "src/index.ts",
   "version": "1.0.0",
   "description": "A realtime server for Kronos protocol.",
-  "main": "src/index.ts",
-  "repository": {
-    "type": "git",
-    "url": "git+ssh://git@github.com/kronos-io/kronos.server.git"
-  },
+  "repository": "git@github.com:kronos-io/kronos.server.git",
   "author": "Clément DOUIN <clement.douin@gmail.com>",
   "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/kronos-io/kronos.server/issues"
-  },
-  "homepage": "https://github.com/kronos-io/kronos.server",
+  "private": false,
   "dependencies": {
+    "@types/node": "^10.10.3",
+    "@types/rethinkdb": "^2.3.13",
     "rethinkdb": "^2.3.3",
+    "typescript": "^3.0.3",
     "uuid": "^3.3.2"
   },
   "devDependencies": {
-    "@types/rethinkdb": "^2.3.13",
     "javascript-typescript-langserver": "^2.11.1",
     "soywod-tslint-rules": "^1.0.5",
     "ts-node-dev": "^1.0.0-pre.30",
@@ -26,7 +22,7 @@
     "tslint-language-service": "^0.9.9"
   },
   "scripts": {
-    "start:development": "ts-node-dev --no-notify src/index.ts",
-    "start:production": "ts-node src/index.ts"
+    "start": "ts-node-dev --no-notify src/index.ts",
+    "build": "tsc"
   }
 }

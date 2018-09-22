@@ -3,9 +3,10 @@ WORKDIR /home/node
 
 COPY app/package.json .
 COPY app/package-lock.json .
-RUN npm install
+RUN npm install --only=prod
 
 COPY app/tsconfig.json .
-COPY app/tslint.json .
+COPY app/src .
 
-CMD npm run start:${NODE_ENV}
+RUN npm run build
+CMD node dist/index.js

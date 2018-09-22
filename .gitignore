@@ -1,2 +1,2 @@
-/node/app/node_modules
-/rethinkdb/data
+/server/app/node_modules
+/database/data
