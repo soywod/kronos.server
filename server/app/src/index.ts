@@ -1,12 +1,7 @@
-import {connect} from 'rethinkdb'
+import {connect} from './database'
 
-const {start, on_error} = require('./server')
+import {on_error, start} from './server'
 
-const params = {
-  db: 'kronos',
-  host: 'database',
-}
-
-connect(params)
+connect()
   .then(start)
   .catch(on_error)

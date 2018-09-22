@@ -1,76 +1,68 @@
-const create_tcp_server = require("net").createServer
-const uuid = require("uuid").v4
-const create_hash = require("crypto").createHash
+import * as net from 'net'
+import * as r from 'rethinkdb'
+import * as uuid from 'uuid'
 
 const tcp = require('./tcp')
 const ws  = require('./ws')
 
-const $task    = require("./task")
-const $user    = require("./user")
-const $device  = require("./device")
+const $task    = require('./task')
+const $user    = require('./user')
+const $device  = require('./device')
 
-const session = require("./session")
-
-const port = 5000 || process.env.PORT
-
-// -------------------------------------------------------------- # Public API #
-
-function start(conn) {
-  const tcp_server = create_tcp_server(on_create_server(conn))
-
-  tcp_server.on("error", on_error)
-  tcp_server.listen(port, on_listen)
-}
-
-function on_error(e) {
-  console.error(e)
-}
-
-module.exports = {
-  start,
-  on_error,
-}
+const session = require('./session')
 
 // ------------------------------------------------------------- # Private API #
 
-function on_create_server(conn) {
-  return (client) => {
-    const session_id = session.create()
-    console.log(`New session "${session_id}"`)
+const port = +(process.env.PORT || 5000)
 
-    const params = {conn, client, session_id}
-    client.on("end",  on_client_end(params))
-    client.on("data", on_client_data(params))
+interface SocketData {
+  database: r.Connection
+  socket: net.Socket
+  session_id: string
+  payload?: string
+}
+
+function on_create_server(database: r.Connection) {
+  return (socket: net.Socket) => {
+    const session_id = session.create()
+    console.log(`New session '${session_id}'`)
+
+    const data: SocketData = {database, socket, session_id}
+    socket.on('data', on_socket_data(data))
+    socket.on('end',  on_socket_end(data))
   }
 }
 
-function on_client_end({conn, session_id}) {
+function on_socket_end(data: SocketData) {
+  const {database, session_id} = data
+
   return async () => {
     const device_id = session.delete_(session_id)
-    console.log(`End session "${session_id}"`)
 
     if (device_id) {
-      await $device.disconnect(conn, device_id)
-      console.log(`Disconnect device "${session_id}"`)
+      console.log(`End session '${session_id}'`)
+      await $device.disconnect(database, device_id)
+      console.log(`Disconnect device '${session_id}'`)
     }
   }
 }
 
-function on_client_data(params) {
-  const {client, session_id} = params
-  return async (raw_data) => {
-    const params_ = {...params, raw_data}
+function on_socket_data(data: SocketData) {
+  const {socket, session_id} = data
+
+  return async (payload: string) => {
+    const params_ = {...data, payload}
 
     try {
       await on_client_data_(params_)
     } catch (e) {
-      send_error(client, session_id, e.message)
+      send_error(socket, session_id, e.message)
       console.warn(e.message)
     }
   }
 }
 
-async function on_client_data_({conn, client, session_id, raw_data}) {
+async function on_client_data_(data: SocketData) {
   const data = parse_raw_data(raw_data)
   if (! data.type) throw new Error('missing data type')
 
@@ -91,7 +83,7 @@ async function on_client_data_({conn, client, session_id, raw_data}) {
     return client.write(response.join('\r\n'))
   }
 
-  if (data.type === "login") {
+  if (data.type === 'login') {
     const {user, device}
       = await login({conn, client, user_id, device_id, session_id})
 
@@ -99,18 +91,18 @@ async function on_client_data_({conn, client, session_id, raw_data}) {
   }
 
   switch (type) {
-    case "read-all":
+    case 'read-all':
       return await read_all({conn, client, session_id, user_id})
-    case "write-all":
+    case 'write-all':
       return await write_all({conn, user_id, tasks, version})
-    case "create":
+    case 'create':
       return await create({conn, user_id, task, version})
-    case "update":
+    case 'update':
       return await update({conn, user_id, task, version})
-    case "delete":
+    case 'delete':
       return await delete_({conn, user_id, task_id, version})
     default:
-      throw new Error("invalid data type")
+      throw new Error('invalid data type')
   }
 }
 
@@ -129,7 +121,7 @@ async function watch(params) {
 
 async function read_all({conn, client, session_id, user_id}) {
   const tasks = await $task.read_all(conn, user_id)
-  return send_success(client, session_id, {type: "read-all", tasks})
+  return send_success(client, session_id, {type: 'read-all', tasks})
 }
 
 async function write_all({conn, user_id, tasks, version}) {
@@ -171,7 +163,7 @@ async function login(params) {
   session.set_device(session_id, device_id)
 
   send_success(client, session_id, {
-    type: "login",
+    type: 'login',
     user_id,
     device_id,
     version: user.version,
@@ -181,29 +173,29 @@ async function login(params) {
 }
 
 function parse_task_id(id) {
-  if (! id) throw new Error("missing task id")
-  if (typeof id !== "number") throw new Error("invalid task id")
+  if (! id) throw new Error('missing task id')
+  if (typeof id !== 'number') throw new Error('invalid task id')
 
   return id
 }
 
 function parse_task(obj) {
   return (user_id) => {
-    if (! obj) throw new Error("missing task")
+    if (! obj) throw new Error('missing task')
 
     parse_task_id(obj.id)
 
-    if (! obj.desc) throw new Error("missing task desc")
-    if (typeof obj.desc !== "string") throw new Error("invalid task desc")
+    if (! obj.desc) throw new Error('missing task desc')
+    if (typeof obj.desc !== 'string') throw new Error('invalid task desc')
 
-    if (! obj.tags) throw new Error("missing task tags")
-    if (obj.tags && ! Array.isArray(obj.tags)) throw new Error("invalid task tags")
+    if (! obj.tags) throw new Error('missing task tags')
+    if (obj.tags && ! Array.isArray(obj.tags)) throw new Error('invalid task tags')
 
-    if (obj.active && typeof obj.active !== "number") throw new Error("invalid task active")
-    if (obj.last_active && typeof obj.last_active !== "number") throw new Error("invalid task last_active")
-    if (obj.due && typeof obj.due !== "number") throw new Error("invalid task due")
-    if (obj.done && typeof obj.done !== "number") throw new Error("invalid task done")
-    if (obj.worktime && typeof obj.worktime !== "number") throw new Error("invalid task worktime")
+    if (obj.active && typeof obj.active !== 'number') throw new Error('invalid task active')
+    if (obj.last_active && typeof obj.last_active !== 'number') throw new Error('invalid task last_active')
+    if (obj.due && typeof obj.due !== 'number') throw new Error('invalid task due')
+    if (obj.done && typeof obj.done !== 'number') throw new Error('invalid task done')
+    if (obj.worktime && typeof obj.worktime !== 'number') throw new Error('invalid task worktime')
 
     return {
       ...obj,
@@ -235,4 +227,17 @@ function send(client, session_id, data) {
 
 function on_listen() {
   console.log(`Kronos server listening on port ${port}...`)
+}
+
+// -------------------------------------------------------------- # Public API #
+
+export function start(database: r.Connection) {
+  const server = net.createServer(on_create_server(database))
+
+  server.on('error', on_error)
+  server.listen(port, on_listen)
+}
+
+export function on_error(e: Error) {
+  console.error(e)
 }
