@@ -1,19 +1,20 @@
 // -------------------------------------------------------------- # Public API #
 
-function parse(raw_input) {
+function parse(data) {
   try {
-    const data = JSON.parse(raw_input)
+    const payload = JSON.parse(data.payload)
 
     return {
-      ...data,
-      task: data.task || {},
-      tasks: data.tasks || [],
-      version: data.version || Date.now(),
-      task_id: data.task_id || 0,
-      user_id: data.user_id || "",
-      device_id: data.device_id || "",
+      ...payload,
+      task: payload.task || {},
+      tasks: payload.tasks || [],
+      version: payload.version || Date.now(),
+      task_id: payload.task_id || 0,
+      user_id: payload.user_id || "",
+      device_id: payload.device_id || "",
     }
   } catch (e) {
+    console.warn(e, data)
     return null
   }
 }

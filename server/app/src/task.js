@@ -59,7 +59,7 @@ async function delete_(conn, task_id, user_id) {
   }
 }
 
-async function watch({conn, client, user, device, on_change}) {
+async function watch({database, user, device, on_change}) {
   const {id: user_id, version} = user
   const {id: device_id} = device
 
@@ -67,7 +67,7 @@ async function watch({conn, client, user, device, on_change}) {
     .table("task")
     .filter({user_id})
     .changes()
-    .run(conn, (err, cursor) => {
+    .run(database, (err, cursor) => {
       if (err) throw new Error("task watch failed")
 
       cursor.each((err, changes) => {

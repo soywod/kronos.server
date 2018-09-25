@@ -1,5 +1,17 @@
 {
   "extends": "soywod-tslint-rules",
   "rules": {
+    "trailing-comma": [
+      true,
+      {
+        "singleline": "never",
+        "multiline": {
+          "objects": "always",
+          "arrays": "always",
+          "functions": "always",
+          "typeLiterals": "never"
+        }
+      }
+    ]
   }
 }

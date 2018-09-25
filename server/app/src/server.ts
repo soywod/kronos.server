@@ -13,13 +13,80 @@ const session = require('./session')
 
 // ------------------------------------------------------------- # Private API #
 
-const port = +(process.env.PORT || 5000)
+const port: number = +(process.env.PORT || 5000)
+
+type User = any
+type Device = any
+
+interface Task {
+  id: number
+  desc: string
+  tags: string[]
+  active: number
+  last_active: number
+  due: number
+  done: number
+  worktime: number
+}
 
 interface SocketData {
   database: r.Connection
   socket: net.Socket
   session_id: string
   payload?: string
+}
+
+type Payload =
+  | HandshakePayload
+  | LoginPayload
+  | ReadAllPayload
+  | WriteAllPayload
+  | CreatePayload
+  | UpdatePayload
+  | DeletePayload
+
+interface AuthPayload {
+  user_id: string
+  device_id: string
+}
+
+interface HandshakePayload {
+  type: 'handshake'
+  key: string
+}
+
+interface LoginPayload {
+  type: 'login'
+  user_id?: string
+  device_id?: string
+}
+
+type ReadAllPayload = AuthPayload & {
+  type: 'read-all'
+}
+
+type WriteAllPayload = AuthPayload & {
+  type: 'write-all'
+  tasks: Task[]
+  version: number
+}
+
+type CreatePayload = AuthPayload & {
+  type: 'create'
+  task: Task
+  version: number
+}
+
+type UpdatePayload = AuthPayload & {
+  type: 'update'
+  task: Task
+  version: number
+}
+
+type DeletePayload = AuthPayload & {
+  type: 'delete'
+  task_id: number
+  version: number
 }
 
 function on_create_server(database: r.Connection) {
@@ -54,175 +121,175 @@ function on_socket_data(data: SocketData) {
     const params_ = {...data, payload}
 
     try {
-      await on_client_data_(params_)
+      await on_socket_data_(params_)
     } catch (e) {
       send_error(socket, session_id, e.message)
-      console.warn(e.message)
+      console.warn(e)
     }
   }
 }
 
-async function on_client_data_(data: SocketData) {
-  const data = parse_raw_data(raw_data)
-  if (! data.type) throw new Error('missing data type')
+async function on_socket_data_(data: SocketData) {
+  const {socket, session_id} = data
 
-  const {type, user_id, device_id, task, tasks, task_id, version} = data
+  const payload = parse_payload(data)
+  if (! payload) throw new Error('missing data type')
 
-  if (data.type === 'handshake') {
+  if (payload.type === 'handshake') {
     session.enable_ws(session_id)
 
     const response = [
       'HTTP/1.1 101 Switching Protocols',
       'Upgrade: websocket',
       'Connection: Upgrade',
-      'Sec-WebSocket-Accept: ' + data.key,
+      'Sec-WebSocket-Accept: ' + payload.key,
       '',
       '',
     ]
 
-    return client.write(response.join('\r\n'))
+    return socket.write(response.join('\r\n'))
   }
 
-  if (data.type === 'login') {
-    const {user, device}
-      = await login({conn, client, user_id, device_id, session_id})
-
-    return await watch({conn, client, session_id, user, device})
+  if (payload.type === 'login') {
+    const {user, device} = await login({...data, ...payload})
+    return await watch({...data, user, device})
   }
 
-  switch (type) {
+  switch (payload.type) {
     case 'read-all':
-      return await read_all({conn, client, session_id, user_id})
+      return await read_all({...data, ...payload})
     case 'write-all':
-      return await write_all({conn, user_id, tasks, version})
+      return await write_all({...data, ...payload})
     case 'create':
-      return await create({conn, user_id, task, version})
+      return await create({...data, ...payload})
     case 'update':
-      return await update({conn, user_id, task, version})
+      return await update({...data, ...payload})
     case 'delete':
-      return await delete_({conn, user_id, task_id, version})
+      return await delete_({...data, ...payload})
     default:
       throw new Error('invalid data type')
   }
 }
 
-function parse_raw_data(raw_data) {
-  return tcp.parse(raw_data) || ws.parse(raw_data) || {}
+function parse_payload(data: SocketData) {
+  return (tcp.parse(data) || ws.parse(data) || null)
 }
 
-async function watch(params) {
-  const {client, session_id} = params
-  const on_change = data => {
-    send_success(client, session_id, data)
-  }
+async function login(data: SocketData & LoginPayload) {
+  const {database, socket, session_id} = data
 
-  await $task.watch({...params, on_change})
-}
+  const user_id = data.user_id || await $user.create(database)
+  const user = await $user.read(database, user_id)
 
-async function read_all({conn, client, session_id, user_id}) {
-  const tasks = await $task.read_all(conn, user_id)
-  return send_success(client, session_id, {type: 'read-all', tasks})
-}
+  const device_id = data.device_id || await $device.create(database, user_id)
+  const device = await $device.read(database, device_id)
 
-async function write_all({conn, user_id, tasks, version}) {
-  await $task.write_all(conn, user_id, tasks)
-  await $user.set_version({conn, user_id, version})
-}
-
-async function create(params) {
-  const {conn, client, user_id, version} = params
-  const task = parse_task(params.task)(user_id)
-  await $task.create(conn, task)
-  await $user.set_version({conn, user_id, version})
-}
-
-async function update(params) {
-  const {conn, client, user_id, version} = params
-  const task = parse_task(params.task)(user_id)
-  await $task.update(conn, task)
-  await $user.set_version({conn, user_id, version})
-}
-
-async function delete_(params) {
-  const {conn, client, user_id, version} = params
-  const task_id = parse_task_id(params.task_id)
-  await $task.delete_(conn, task_id, user_id)
-  await $user.set_version({conn, user_id, version})
-}
-
-async function login(params) {
-  const {conn, client, session_id} = params
-
-  const user_id = params.user_id || await $user.create(conn)
-  const user = await $user.read(conn, user_id)
-
-  const device_id = params.device_id || await $device.create(conn, user_id)
-  const device = await $device.read(conn, device_id)
-
-  await $device.connect(conn, device_id)
+  await $device.connect(database, device_id)
   session.set_device(session_id, device_id)
 
-  send_success(client, session_id, {
+  send_success(socket, session_id, {
+    device_id,
     type: 'login',
     user_id,
-    device_id,
     version: user.version,
   })
 
   return {user, device}
 }
 
-function parse_task_id(id) {
+async function watch(data: SocketData & User & Device) {
+  const {socket, session_id} = data
+  const on_change = (changes: any) => {
+    send_success(socket, session_id, changes)
+  }
+
+  await $task.watch({...data, on_change})
+}
+
+async function read_all(data: SocketData & ReadAllPayload) {
+  const {database, socket, session_id, user_id} = data
+  const tasks = await $task.read_all(database, user_id)
+  return send_success(socket, session_id, {type: 'read-all', tasks})
+}
+
+async function write_all(data: SocketData & WriteAllPayload) {
+  const {database, socket, tasks, version, user_id} = data
+  await $task.write_all(database, user_id, tasks)
+  await $user.set_version({database, user_id, version})
+}
+
+async function create(data: SocketData & CreatePayload) {
+  const {database, socket, user_id, version} = data
+  const task = parse_task(data.task)(user_id)
+  await $task.create(socket, task)
+  await $user.set_version(data)
+}
+
+async function update(data: SocketData & UpdatePayload) {
+  const {database, socket, user_id, version} = data
+  const task = parse_task(data.task)(user_id)
+  await $task.update(database, task)
+  await $user.set_version(data)
+}
+
+async function delete_(data: SocketData & DeletePayload) {
+  const {database, socket, user_id, version} = data
+  const task_id = parse_task_id(data.task_id)
+  await $task.delete_(database, task_id, user_id)
+  await $user.set_version(data)
+}
+
+function parse_task_id(id: any) {
   if (! id) throw new Error('missing task id')
   if (typeof id !== 'number') throw new Error('invalid task id')
 
-  return id
+  return id as number
 }
 
-function parse_task(obj) {
-  return (user_id) => {
-    if (! obj) throw new Error('missing task')
+function parse_task(task: any) {
+  return (user_id: string) => {
+    if (! task) throw new Error('missing task')
 
-    parse_task_id(obj.id)
+    parse_task_id(task.id)
 
-    if (! obj.desc) throw new Error('missing task desc')
-    if (typeof obj.desc !== 'string') throw new Error('invalid task desc')
+    if (! task.desc) throw new Error('missing task desc')
+    if (typeof task.desc !== 'string') throw new Error('invalid task desc')
 
-    if (! obj.tags) throw new Error('missing task tags')
-    if (obj.tags && ! Array.isArray(obj.tags)) throw new Error('invalid task tags')
+    if (! task.tags) throw new Error('missing task tags')
+    if (task.tags && ! Array.isArray(task.tags)) throw new Error('invalid task tags')
 
-    if (obj.active && typeof obj.active !== 'number') throw new Error('invalid task active')
-    if (obj.last_active && typeof obj.last_active !== 'number') throw new Error('invalid task last_active')
-    if (obj.due && typeof obj.due !== 'number') throw new Error('invalid task due')
-    if (obj.done && typeof obj.done !== 'number') throw new Error('invalid task done')
-    if (obj.worktime && typeof obj.worktime !== 'number') throw new Error('invalid task worktime')
+    if (task.active && typeof task.active !== 'number') throw new Error('invalid task active')
+    if (task.last_active && typeof task.last_active !== 'number') throw new Error('invalid task last_active')
+    if (task.due && typeof task.due !== 'number') throw new Error('invalid task due')
+    if (task.done && typeof task.done !== 'number') throw new Error('invalid task done')
+    if (task.worktime && typeof task.worktime !== 'number') throw new Error('invalid task worktime')
 
     return {
-      ...obj,
-      active: obj.active || 0,
-      last_active: obj.last_active || 0,
-      due: obj.due || 0,
-      done: obj.done || 0,
-      worktime: obj.worktime || 0,
+      ...task,
+      active: task.active || 0,
+      done: task.done || 0,
+      due: task.due || 0,
+      last_active: task.last_active || 0,
       user_id,
-    }
+      worktime: task.worktime || 0,
+    } as Task
   }
 }
 
-function send_success(client, session_id, data = {}) {
-  return send(client, session_id, {success: true, ...data})
+function send_success(socket: net.Socket, session_id: string, data: object = {}) {
+  return send(socket, session_id, {success: true, ...data})
 }
 
-function send_error(client, session_id, error) {
-  return send(client, session_id, {success: false, error})
+function send_error(socket: net.Socket, session_id: string, error: string) {
+  return send(socket, session_id, {success: false, error})
 }
 
-function send(client, session_id, data) {
+function send(socket: net.Socket, session_id: string, data: object) {
   const response = session.ws_enabled(session_id)
     ? ws.format(data)
     : tcp.format(data)
 
-  return client.write(response)
+  return socket.write(response)
 }
 
 function on_listen() {
