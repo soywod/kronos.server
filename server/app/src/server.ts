@@ -29,14 +29,14 @@ interface Task {
   worktime: number
 }
 
-interface SocketData {
+export interface SocketData {
   database: r.Connection
   socket: net.Socket
   session_id: string
   payload?: string
 }
 
-type Payload =
+export type Payload =
   | HandshakePayload
   | LoginPayload
   | ReadAllPayload
@@ -45,45 +45,45 @@ type Payload =
   | UpdatePayload
   | DeletePayload
 
-interface AuthPayload {
+export interface AuthPayload {
   user_id: string
   device_id: string
 }
 
-interface HandshakePayload {
+export interface HandshakePayload {
   type: 'handshake'
   key: string
 }
 
-interface LoginPayload {
+export interface LoginPayload {
   type: 'login'
   user_id?: string
   device_id?: string
 }
 
-type ReadAllPayload = AuthPayload & {
+export type ReadAllPayload = AuthPayload & {
   type: 'read-all'
 }
 
-type WriteAllPayload = AuthPayload & {
+export type WriteAllPayload = AuthPayload & {
   type: 'write-all'
   tasks: Task[]
   version: number
 }
 
-type CreatePayload = AuthPayload & {
+export type CreatePayload = AuthPayload & {
   type: 'create'
   task: Task
   version: number
 }
 
-type UpdatePayload = AuthPayload & {
+export type UpdatePayload = AuthPayload & {
   type: 'update'
   task: Task
   version: number
 }
 
-type DeletePayload = AuthPayload & {
+export type DeletePayload = AuthPayload & {
   type: 'delete'
   task_id: number
   version: number
@@ -172,7 +172,7 @@ async function on_socket_data_(data: SocketData) {
 }
 
 function parse_payload(data: SocketData) {
-  return (tcp.parse(data) || ws.parse(data) || null)
+  return (tcp.parse(data) || ws.parse(data) || null) as Payload | null
 }
 
 async function login(data: SocketData & LoginPayload) {

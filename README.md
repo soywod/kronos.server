@@ -11,7 +11,7 @@ A realtime server for [Kronos protocol](https://github.com/kronos-io/kronos).
     - [X] server.js
     - [ ] session.js
     - [ ] task.js
-    - [ ] tcp.js
+    - [X] tcp.js
     - [ ] user.js
     - [ ] ws.js
   - [ ] Split everything as much as possible (KISS & DRY)
