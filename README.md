@@ -2,6 +2,21 @@
 
 A realtime server for [Kronos protocol](https://github.com/kronos-io/kronos).
 
+## TODO
+
+  - [ ] Rewrite all in TypeScript
+    - [X] database.js
+    - [ ] device.js
+    - [X] index.js
+    - [X] server.js
+    - [ ] session.js
+    - [ ] task.js
+    - [ ] tcp.js
+    - [ ] user.js
+    - [ ] ws.js
+  - [ ] Split everything as much as possible (KISS & DRY)
+  - [ ] Refactor to respect the [Kronos protocol](https://github.com/kronos-io/kronos)
+
 ## Table of contents
 
   * [Connect](#connect)
