@@ -2,8 +2,8 @@ import * as net from 'net'
 import * as r from 'rethinkdb'
 import * as uuid from 'uuid'
 
-const tcp = require('./tcp')
-const ws  = require('./ws')
+import * as tcp from './tcp'
+import * as ws from './websocket'
 
 const $task    = require('./task')
 const $user    = require('./user')

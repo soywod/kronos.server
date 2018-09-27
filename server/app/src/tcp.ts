@@ -50,9 +50,9 @@ export function parse(data: SocketData) {
   }
 }
 
-export function format(data: object) {
+export function format(payload: object) {
   try {
-    return JSON.stringify(data) + '\n'
+    return JSON.stringify(payload) + '\n'
   } catch (e) {
     return ''
   }

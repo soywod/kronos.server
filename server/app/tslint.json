@@ -1,6 +1,7 @@
 {
   "extends": "soywod-tslint-rules",
   "rules": {
+    "no-bitwise": false,
     "trailing-comma": [
       true,
       {
