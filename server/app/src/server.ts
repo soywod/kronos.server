@@ -6,7 +6,7 @@ import * as tcp from './tcp'
 import * as ws from './websocket'
 
 const $task    = require('./task')
-const $user    = require('./user')
+import * as $user from './user'
 const $device  = require('./device')
 
 const session = require('./session')
@@ -178,8 +178,8 @@ function parse_payload(data: SocketData) {
 async function login(data: SocketData & LoginPayload) {
   const {database, socket, session_id} = data
 
-  const user_id = data.user_id || await $user.create(database)
-  const user = await $user.read(database, user_id)
+  const user_id = data.user_id || await $user.create({database})
+  const user = await $user.read({database, user_id})
 
   const device_id = data.device_id || await $device.create(database, user_id)
   const device = await $device.read(database, device_id)
@@ -215,28 +215,28 @@ async function read_all(data: SocketData & ReadAllPayload) {
 async function write_all(data: SocketData & WriteAllPayload) {
   const {database, socket, tasks, version, user_id} = data
   await $task.write_all(database, user_id, tasks)
-  await $user.set_version({database, user_id, version})
+  await $user.update_version({database, user_id, version})
 }
 
 async function create(data: SocketData & CreatePayload) {
   const {database, socket, user_id, version} = data
   const task = parse_task(data.task)(user_id)
   await $task.create(socket, task)
-  await $user.set_version(data)
+  await $user.update_version(data)
 }
 
 async function update(data: SocketData & UpdatePayload) {
   const {database, socket, user_id, version} = data
   const task = parse_task(data.task)(user_id)
   await $task.update(database, task)
-  await $user.set_version(data)
+  await $user.update_version(data)
 }
 
 async function delete_(data: SocketData & DeletePayload) {
   const {database, socket, user_id, version} = data
   const task_id = parse_task_id(data.task_id)
   await $task.delete_(database, task_id, user_id)
-  await $user.set_version(data)
+  await $user.update_version(data)
 }
 
 function parse_task_id(id: any) {
