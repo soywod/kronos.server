@@ -2,13 +2,12 @@ import * as net from 'net'
 import * as r from 'rethinkdb'
 import * as uuid from 'uuid'
 
+import * as $device from './device'
 import * as tcp from './tcp'
+import * as $user from './user'
 import * as ws from './websocket'
 
 const $task    = require('./task')
-import * as $user from './user'
-const $device  = require('./device')
-
 const session = require('./session')
 
 // ------------------------------------------------------------- # Private API #
@@ -108,7 +107,7 @@ function on_socket_end(data: SocketData) {
 
     if (device_id) {
       console.log(`End session '${session_id}'`)
-      await $device.disconnect(database, device_id)
+      await $device.disconnect({database, device_id})
       console.log(`Disconnect device '${session_id}'`)
     }
   }
@@ -181,10 +180,10 @@ async function login(data: SocketData & LoginPayload) {
   const user_id = data.user_id || await $user.create({database})
   const user = await $user.read({database, user_id})
 
-  const device_id = data.device_id || await $device.create(database, user_id)
-  const device = await $device.read(database, device_id)
+  const device_id = data.device_id || await $device.create({database, user_id})
+  const device = await $device.read({database, device_id})
 
-  await $device.connect(database, device_id)
+  await $device.connect({database, device_id})
   session.set_device(session_id, device_id)
 
   send_success(socket, session_id, {
