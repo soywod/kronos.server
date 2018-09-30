@@ -4,9 +4,9 @@ import * as uuid from 'uuid'
 
 import * as $device from './device'
 import * as $session from './session'
-import * as tcp from './tcp'
+import * as $tcp from './tcp'
 import * as $user from './user'
-import * as ws from './websocket'
+import * as $websocket from './websocket'
 
 const $task    = require('./task')
 
@@ -171,7 +171,7 @@ async function on_socket_data_(data: SocketData) {
 }
 
 function parse_payload(data: SocketData) {
-  return (tcp.parse(data) || ws.parse(data) || null) as Payload | null
+  return ($tcp.parse(data) || $websocket.parse(data) || null) as Payload | null
 }
 
 async function login(data: SocketData & LoginPayload) {
@@ -285,8 +285,8 @@ function send_error(socket: net.Socket, session_id: string, error: string) {
 
 function send(socket: net.Socket, session_id: string, data: object) {
   const response = $session.websocket_enabled(session_id)
-    ? ws.format(data)
-    : tcp.format(data)
+    ? $websocket.format(data)
+    : $tcp.format(data)
 
   return socket.write(response)
 }
