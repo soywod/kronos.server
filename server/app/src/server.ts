@@ -3,12 +3,12 @@ import * as r from 'rethinkdb'
 import * as uuid from 'uuid'
 
 import * as $device from './device'
+import * as $session from './session'
 import * as tcp from './tcp'
 import * as $user from './user'
 import * as ws from './websocket'
 
 const $task    = require('./task')
-const session = require('./session')
 
 // ------------------------------------------------------------- # Private API #
 
@@ -90,7 +90,7 @@ export type DeletePayload = AuthPayload & {
 
 function on_create_server(database: r.Connection) {
   return (socket: net.Socket) => {
-    const session_id = session.create()
+    const session_id = $session.create()
     console.log(`New session '${session_id}'`)
 
     const data: SocketData = {database, socket, session_id}
@@ -103,7 +103,7 @@ function on_socket_end(data: SocketData) {
   const {database, session_id} = data
 
   return async () => {
-    const device_id = session.delete_(session_id)
+    const device_id = $session.delete_(session_id)
 
     if (device_id) {
       console.log(`End session '${session_id}'`)
@@ -135,7 +135,7 @@ async function on_socket_data_(data: SocketData) {
   if (! payload) throw new Error('missing data type')
 
   if (payload.type === 'handshake') {
-    session.enable_ws(session_id)
+    $session.enable_websocket(session_id)
 
     const response = [
       'HTTP/1.1 101 Switching Protocols',
@@ -184,7 +184,7 @@ async function login(data: SocketData & LoginPayload) {
   const device = await $device.read({database, device_id})
 
   await $device.connect({database, device_id})
-  session.set_device(session_id, device_id)
+  $session.update_device(session_id, device_id)
 
   send_success(socket, session_id, {
     device_id,
@@ -284,7 +284,7 @@ function send_error(socket: net.Socket, session_id: string, error: string) {
 }
 
 function send(socket: net.Socket, session_id: string, data: object) {
-  const response = session.ws_enabled(session_id)
+  const response = $session.websocket_enabled(session_id)
     ? ws.format(data)
     : tcp.format(data)
 
