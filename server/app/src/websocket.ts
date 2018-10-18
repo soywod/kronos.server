@@ -3,7 +3,7 @@ import {createHash} from 'crypto'
 import * as tcp from './tcp'
 
 import {
-  HandshakePayload,
+  PayloadHandshake,
   SocketData,
 } from './server'
 
@@ -54,10 +54,9 @@ export function parse(data: SocketData) {
       .update(input_key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11', 'utf8')
       .digest('base64')
 
-    return {type: 'handshake', key: output_key} as HandshakePayload
+    return {type: 'handshake', key: output_key} as PayloadHandshake
   }
 
-  const payload_len = payload.readUInt8(1) & 0b01111111
   const mask = payload.slice(2, 6)
   const payload_encoded = payload.slice(6)
   const output = []

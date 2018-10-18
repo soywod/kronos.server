@@ -25,7 +25,7 @@ type ConnectParams = ReadParams
 type DisconnectParams = ReadParams
 type ToggleParams = ReadParams & WithConnected
 
-interface Device {
+export interface Device {
   id: string
   user_id: string
   connected: boolean

@@ -1,32 +1,21 @@
 import * as net from 'net'
 import * as r from 'rethinkdb'
-import * as uuid from 'uuid'
+
+import {Event as DatabaseEvent} from './database'
+import {Device} from './device'
+import {Task} from './task'
+import {User} from './user'
 
 import * as $device from './device'
 import * as $session from './session'
+import * as $task from './task'
 import * as $tcp from './tcp'
 import * as $user from './user'
 import * as $websocket from './websocket'
 
-const $task    = require('./task')
-
 // ------------------------------------------------------------- # Private API #
 
-const port: number = +(process.env.PORT || 5000)
-
-type User = any
-type Device = any
-
-interface Task {
-  id: number
-  desc: string
-  tags: string[]
-  active: number
-  last_active: number
-  due: number
-  done: number
-  worktime: number
-}
+const port = (process.env.PORT || 5000) as number
 
 export interface SocketData {
   database: r.Connection
@@ -36,56 +25,62 @@ export interface SocketData {
 }
 
 export type Payload =
-  | HandshakePayload
-  | LoginPayload
-  | ReadAllPayload
-  | WriteAllPayload
-  | CreatePayload
-  | UpdatePayload
-  | DeletePayload
+  | PayloadHandshake
+  | PayloadLogin
+  | PayloadReadAll
+  | PayloadWriteAll
+  | PayloadCreate
+  | PayloadUpdate
+  | PayloadDelete
 
-export interface AuthPayload {
+export interface PayloadAuth {
   user_id: string
   device_id: string
 }
 
-export interface HandshakePayload {
+export interface PayloadHandshake {
   type: 'handshake'
   key: string
 }
 
-export interface LoginPayload {
+export interface PayloadLogin {
   type: 'login'
   user_id?: string
   device_id?: string
 }
 
-export type ReadAllPayload = AuthPayload & {
+export type PayloadReadAll = PayloadAuth & {
   type: 'read-all'
 }
 
-export type WriteAllPayload = AuthPayload & {
+export type PayloadWriteAll = PayloadAuth & {
   type: 'write-all'
   tasks: Task[]
   version: number
 }
 
-export type CreatePayload = AuthPayload & {
+export type PayloadCreate = PayloadAuth & {
   type: 'create'
   task: Task
   version: number
 }
 
-export type UpdatePayload = AuthPayload & {
+export type PayloadUpdate = PayloadAuth & {
   type: 'update'
   task: Task
   version: number
 }
 
-export type DeletePayload = AuthPayload & {
+export type PayloadDelete = PayloadAuth & {
   type: 'delete'
   task_id: number
   version: number
+}
+
+interface WatchParams {
+  data: SocketData
+  device: Device
+  user: User
 }
 
 function on_create_server(database: r.Connection) {
@@ -151,7 +146,7 @@ async function on_socket_data_(data: SocketData) {
 
   if (payload.type === 'login') {
     const {user, device} = await login({...data, ...payload})
-    return await watch({...data, user, device})
+    return await watch({data, user, device})
   }
 
   switch (payload.type) {
@@ -174,7 +169,7 @@ function parse_payload(data: SocketData) {
   return ($tcp.parse(data) || $websocket.parse(data) || null) as Payload | null
 }
 
-async function login(data: SocketData & LoginPayload) {
+async function login(data: SocketData & PayloadLogin) {
   const {database, socket, session_id} = data
 
   const user_id = data.user_id || await $user.create({database})
@@ -196,45 +191,45 @@ async function login(data: SocketData & LoginPayload) {
   return {user, device}
 }
 
-async function watch(data: SocketData & User & Device) {
-  const {socket, session_id} = data
-  const on_change = (changes: any) => {
+async function watch(params: WatchParams) {
+  const {device, user} = params
+  const {database, socket, session_id} = params.data
+  const on_change = (changes: DatabaseEvent) =>
     send_success(socket, session_id, changes)
-  }
 
-  await $task.watch({...data, on_change})
+  await $task.watch({database, user, device, on_change})
 }
 
-async function read_all(data: SocketData & ReadAllPayload) {
+async function read_all(data: SocketData & PayloadReadAll) {
   const {database, socket, session_id, user_id} = data
-  const tasks = await $task.read_all(database, user_id)
+  const tasks = await $task.read_all({database, user_id})
   return send_success(socket, session_id, {type: 'read-all', tasks})
 }
 
-async function write_all(data: SocketData & WriteAllPayload) {
-  const {database, socket, tasks, version, user_id} = data
-  await $task.write_all(database, user_id, tasks)
+async function write_all(data: SocketData & PayloadWriteAll) {
+  const {database, tasks, version, user_id} = data
+  await $task.write_all({database, user_id, tasks})
   await $user.update_version({database, user_id, version})
 }
 
-async function create(data: SocketData & CreatePayload) {
-  const {database, socket, user_id, version} = data
+async function create(data: SocketData & PayloadCreate) {
+  const {database, user_id} = data
   const task = parse_task(data.task)(user_id)
-  await $task.create(socket, task)
+  await $task.create({database, task, user_id})
   await $user.update_version(data)
 }
 
-async function update(data: SocketData & UpdatePayload) {
-  const {database, socket, user_id, version} = data
+async function update(data: SocketData & PayloadUpdate) {
+  const {database, user_id} = data
   const task = parse_task(data.task)(user_id)
-  await $task.update(database, task)
+  await $task.update({database, task, user_id})
   await $user.update_version(data)
 }
 
-async function delete_(data: SocketData & DeletePayload) {
-  const {database, socket, user_id, version} = data
+async function delete_(data: SocketData & PayloadDelete) {
+  const {database, user_id} = data
   const task_id = parse_task_id(data.task_id)
-  await $task.delete_(database, task_id, user_id)
+  await $task.delete_({database, task_id, user_id})
   await $user.update_version(data)
 }
 
