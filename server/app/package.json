@@ -17,10 +17,10 @@
     "uuid": "^3.3.2"
   },
   "devDependencies": {
-    "javascript-typescript-langserver": "^2.11.1",
     "ts-node-dev": "^1.0.0-pre.30",
     "tslint": "^5.11.0",
-    "tslint-language-service": "^0.9.9"
+    "tslint-language-service": "^0.9.9",
+    "typescript-language-server": "^0.3.6"
   },
   "scripts": {
     "start": "ts-node-dev --no-notify src/index.ts",
