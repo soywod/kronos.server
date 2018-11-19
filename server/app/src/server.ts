@@ -146,27 +146,27 @@ async function on_socket_data_(data: SocketData) {
 
   if (payload.type === 'login') {
     const {user, device} = await login({...data, ...payload})
-    return await watch({data, user, device})
+    return watch({data, user, device})
   }
 
   switch (payload.type) {
     case 'read-all':
-      return await read_all({...data, ...payload})
+      return read_all({...data, ...payload})
     case 'write-all':
-      return await write_all({...data, ...payload})
+      return write_all({...data, ...payload})
     case 'create':
-      return await create({...data, ...payload})
+      return create({...data, ...payload})
     case 'update':
-      return await update({...data, ...payload})
+      return update({...data, ...payload})
     case 'delete':
-      return await delete_({...data, ...payload})
+      return delete_({...data, ...payload})
     default:
       throw new Error('invalid data type')
   }
 }
 
 function parse_payload(data: SocketData) {
-  return ($tcp.parse(data) || $websocket.parse(data) || null) as Payload | null
+  return ($tcp.parse(data) || $websocket.parse(data)) as Payload | null
 }
 
 async function login(data: SocketData & PayloadLogin) {

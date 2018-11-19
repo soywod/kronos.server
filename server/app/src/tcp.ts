@@ -45,7 +45,6 @@ export function parse(data: SocketData) {
       default: throw new Error('invalid payload type')
     }
   } catch (e) {
-    console.warn(e, data.payload)
     return null
   }
 }
