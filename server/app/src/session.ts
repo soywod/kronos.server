@@ -1,40 +1,68 @@
+import {Cursor} from 'rethinkdb'
 import {v4 as uuid} from 'uuid'
 
-// ------------------------------------------------------------- # Private API #
+// ------------------------------------------------------------------- # Types #
 
 interface Session {
+  cursor: Cursor | null
   device_id: string | null
   websocket_enabled: boolean
 }
 
 interface Sessions {
-  [session_id: string]: Session
+  [id: string]: Session
 }
 
-const sessions = {} as Sessions
+// ----------------------------------------------------------------- # Methods #
 
-// -------------------------------------------------------------- # Public API #
+const sessions: Sessions = {}
 
-export function create() {
+function set_cursor(id: string, cursor: Cursor) {
+  if (id in sessions) {
+    sessions[id].cursor = cursor
+  }
+}
+
+function create() {
   const session_id = uuid()
-  sessions[session_id] = {device_id: null, websocket_enabled: false}
+  sessions[session_id] = {cursor: null, device_id: null, websocket_enabled: false}
+
   return session_id
 }
 
-export function update_device(session_id: string, device_id: string) {
+function update_device(session_id: string, device_id: string) {
   sessions[session_id].device_id = device_id
 }
 
-export function enable_websocket(session_id: string) {
+function enable_websocket(session_id: string) {
   sessions[session_id].websocket_enabled = true
 }
 
-export function websocket_enabled(session_id: string) {
+function websocket_enabled(session_id: string) {
   return sessions[session_id] && sessions[session_id].websocket_enabled
 }
 
-export function delete_(session_id: string) {
-  const session = sessions[session_id] || {device_id: null}
-  delete sessions[session_id]
-  return session.device_id
+function _delete(id: string) {
+  if (!(id in sessions)) {
+    return null
+  }
+
+  const session = sessions[id]
+  const device_id = sessions[id].device_id
+
+  if (session.cursor) {
+    session.cursor.close()
+  }
+
+  delete sessions[id]
+  return device_id
+}
+
+export default {
+  create,
+  delete: _delete,
+  enable_websocket,
+  set_cursor,
+  update_device,
+  websocket_enabled,
 }

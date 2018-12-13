@@ -32,7 +32,7 @@ export async function create(params: CreateParams) {
   const {database} = params
 
   const id = uuid()
-  const user = {id, version: 0}
+  const user = {id, version: -1}
 
   const status = await r.table('user').insert(user).run(database)
   if (! status.inserted) {

@@ -7,7 +7,7 @@ import {Task} from './task'
 import {User} from './user'
 
 import * as $device from './device'
-import * as $session from './session'
+import $session from './session'
 import * as $task from './task'
 import * as $tcp from './tcp'
 import * as $user from './user'
@@ -91,6 +91,11 @@ function on_create_server(database: r.Connection) {
     const data: SocketData = {database, socket, session_id}
     socket.on('data', on_socket_data(data))
     socket.on('end',  on_socket_end(data))
+    socket.on('error',  async error => {
+      console.log(session_id, 'Error socket!')
+      console.log(error)
+      return on_socket_end(data)
+    })
   }
 }
 
@@ -98,12 +103,12 @@ function on_socket_end(data: SocketData) {
   const {database, session_id} = data
 
   return async () => {
-    const device_id = $session.delete_(session_id)
+    const device_id = $session.delete(session_id)
 
     if (device_id) {
       console.log(`End session '${session_id}'`)
       await $device.disconnect({database, device_id})
-      console.log(`Disconnect device '${session_id}'`)
+      console.log(`Disconnect device '${device_id}'`)
     }
   }
 }
@@ -194,10 +199,10 @@ async function login(data: SocketData & PayloadLogin) {
 async function watch(params: WatchParams) {
   const {device, user} = params
   const {database, socket, session_id} = params.data
-  const on_change = (changes: DatabaseEvent) =>
+  const on_change = async (changes: DatabaseEvent) =>
     send_success(socket, session_id, changes)
 
-  await $task.watch({database, user, device, on_change})
+  await $task.watch({database, user, device, on_change, session_id})
 }
 
 async function read_all(data: SocketData & PayloadReadAll) {

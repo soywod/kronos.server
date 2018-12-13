@@ -2,6 +2,7 @@ import * as r from 'rethinkdb'
 
 import {Event as DatabaseEvent} from './database'
 import {Device} from './device'
+import $session from './session'
 import {User} from './user'
 
 // ------------------------------------------------------------- # Private API #
@@ -49,7 +50,17 @@ type WithUserIdParams = WithTasks & WithUserId
 type WatchParams = WithDatabase & {
   user: User
   device: Device
+  session_id: string
   on_change: (changes: DatabaseEvent) => void
+}
+
+const changesOptions = {
+  changefeedQueueSize: 100000,
+  includeInitial: false,
+  includeOffsets: false,
+  includeStates: true,
+  includeTypes: true,
+  squash: false,
 }
 
 function with_index(params: WithIndexParams) {
@@ -138,29 +149,37 @@ export async function delete_(params: DeleteParams) {
 }
 
 export async function watch(params: WatchParams) {
-  const {database, user, device, on_change} = params
+  const {database, user, device, on_change, session_id} = params
   const {id: user_id, version} = user
   const {id: device_id} = device
 
   await r
     .table('task')
     .filter({user_id})
-    .changes()
+    .changes(changesOptions)
     .run(database, (error_run, cursor) => {
       if (error_run) throw new Error('task watch failed')
 
       cursor.each((error_each, changes) => {
-        if (error_each) throw new Error('task watch failed')
+        if (error_each) throw new Error('task watch each cursor failed')
+        $session.set_cursor(session_id, cursor)
+        let payload
 
-        if (! changes.old_val) {
-          const payload = {task: changes.new_val, device_id, version}
-          on_change({type: 'create', ...payload})
-        } else if (! changes.new_val) {
-          const payload = {task_id: changes.old_val.id, device_id, version}
-          on_change({type: 'delete', ...payload})
-        } else {
-          const payload = {task: changes.new_val, device_id, version}
-          on_change({type: 'update', ...payload})
+        switch (changes.type) {
+          case 'add':
+            payload = {task: changes.new_val, device_id, version}
+            return on_change({type: 'create', ...payload})
+
+          case 'change':
+            payload = {task: changes.new_val, device_id, version}
+            return on_change({type: 'update', ...payload})
+
+          case 'remove':
+            payload = {task_id: changes.old_val.id, device_id, version}
+            return on_change({type: 'delete', ...payload})
+
+          default:
+            return
         }
       })
     })
