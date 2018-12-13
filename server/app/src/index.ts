@@ -1,7 +1,7 @@
-import {connect} from './database'
+import $database from './database'
+import $server from './server'
 
-import {on_error, start} from './server'
-
-connect()
-  .then(start)
-  .catch(on_error)
+$database
+  .connect()
+  .then($server.handleStart)
+  .catch($server.handleError)

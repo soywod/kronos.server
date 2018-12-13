@@ -1,23 +1,17 @@
 {
-  "compileOnSave": false,
   "compilerOptions": {
-    "allowJs": true,
     "allowSyntheticDefaultImports": true,
-    "emitDecoratorMetadata": true,
-    "experimentalDecorators": true,
+    "esModuleInterop": true,
     "module": "CommonJS",
-    "target": "ES2015",
-    "moduleResolution": "Node",
-    "outDir": "dist",
     "plugins": [{
       "name": "tslint-language-service"
     }],
     "sourceMap": true,
-    "strict": true
+    "strict": true,
+    "target": "ES6",
+    "typeRoots": ["node_modules/@types", "src/types"]
   },
   "exclude": [
-    ".git/",
-    "dist/",
-    "node_modules/"
+    "node_modules"
   ]
 }

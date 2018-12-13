@@ -1,36 +1,12 @@
-import * as r from 'rethinkdb'
+import rdb from 'rethinkdb'
 
-import {Task} from './task'
-
-// ------------------------------------------------------------- # Private API #
-
-interface EventCreate {
-  type: 'create'
-  task: Task
-}
-
-interface EventUpdate {
-  type: 'update'
-  task: Task
-}
-
-interface EventDelete {
-  type: 'delete'
-  task_id: string
-}
-
-const config: r.ConnectionOptions = {
-  db  : process.env.DB_NAME || 'kronos',
+const config: rdb.ConnectionOptions = {
   host: process.env.DB_HOST || 'database',
+  db: process.env.DB_NAME || 'kronos',
 }
 
-// -------------------------------------------------------------- # Public API #
-
-export type Event = (EventCreate | EventUpdate | EventDelete) & {
-  device_id: string
-  version: number
+function connect() {
+  return rdb.connect(config)
 }
 
-export function connect(): Promise<r.Connection> {
-  return r.connect(config)
-}
+export default {connect}

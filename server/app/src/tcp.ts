@@ -1,5 +1,4 @@
-import {
-  Payload,
+import Payload, {
   PayloadAuth,
   PayloadCreate,
   PayloadDelete,
@@ -7,14 +6,12 @@ import {
   PayloadReadAll,
   PayloadUpdate,
   PayloadWriteAll,
-  SocketData,
-} from './server'
+} from './types/Payload'
+import SocketData from './types/SocketData'
 
-// ------------------------------------------------------------- # Private API #
-
-function parse_auth_payload(payload: Payload) {
-  const user_id = (payload as PayloadAuth).user_id || ''
-  const device_id = (payload as PayloadAuth).device_id || ''
+function parseAuthPayload(payload: PayloadAuth) {
+  const user_id = payload.user_id || ''
+  const device_id = payload.device_id || ''
 
   return {
     device_id,
@@ -22,37 +19,44 @@ function parse_auth_payload(payload: Payload) {
   }
 }
 
-function parse_payload<P extends Payload>(payload: Payload) {
+function parsePayload<P extends Payload>(payload: Payload) {
   return {
     ...payload,
-    ...parse_auth_payload(payload),
+    ...parseAuthPayload(payload as PayloadAuth),
   } as P
 }
 
-// -------------------------------------------------------------- # Public API #
-
-export function parse(data: SocketData) {
+function parse(data: SocketData) {
   try {
     const payload = JSON.parse(data.payload || '{}') as Payload
 
     switch (payload.type) {
-      case 'login': return parse_payload<PayloadLogin>(payload)
-      case 'read-all': return parse_payload<PayloadReadAll>(payload)
-      case 'write-all': return parse_payload<PayloadWriteAll>(payload)
-      case 'create': return parse_payload<PayloadCreate>(payload)
-      case 'update': return parse_payload<PayloadUpdate>(payload)
-      case 'delete': return parse_payload<PayloadDelete>(payload)
-      default: throw new Error('invalid payload type')
+      case 'login':
+        return parsePayload<PayloadLogin>(payload)
+      case 'read-all':
+        return parsePayload<PayloadReadAll>(payload)
+      case 'write-all':
+        return parsePayload<PayloadWriteAll>(payload)
+      case 'create':
+        return parsePayload<PayloadCreate>(payload)
+      case 'update':
+        return parsePayload<PayloadUpdate>(payload)
+      case 'delete':
+        return parsePayload<PayloadDelete>(payload)
+      default:
+        throw new Error('invalid payload type')
     }
-  } catch (e) {
+  } catch (_) {
     return null
   }
 }
 
-export function format(payload: object) {
+function format(payload: object) {
   try {
     return JSON.stringify(payload) + '\n'
   } catch (e) {
     return ''
   }
 }
+
+export default {format, parse}

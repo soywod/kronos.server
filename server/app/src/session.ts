@@ -1,45 +1,25 @@
-import {Cursor} from 'rethinkdb'
 import {v4 as uuid} from 'uuid'
 
-// ------------------------------------------------------------------- # Types #
-
-interface Session {
-  cursor: Cursor | null
-  device_id: string | null
-  websocket_enabled: boolean
-}
-
-interface Sessions {
-  [id: string]: Session
-}
-
-// ----------------------------------------------------------------- # Methods #
+import Session, {Sessions} from './types/Session'
 
 const sessions: Sessions = {}
 
-function set_cursor(id: string, cursor: Cursor) {
-  if (id in sessions) {
-    sessions[id].cursor = cursor
-  }
-}
-
 function create() {
-  const session_id = uuid()
-  sessions[session_id] = {cursor: null, device_id: null, websocket_enabled: false}
+  const id = uuid()
+  const session: Session = {
+    id,
+    device_id: null,
+    cursor: null,
+    mode: 'tcp',
+  }
 
-  return session_id
+  sessions[id] = session
+  return session
 }
 
-function update_device(session_id: string, device_id: string) {
-  sessions[session_id].device_id = device_id
-}
-
-function enable_websocket(session_id: string) {
-  sessions[session_id].websocket_enabled = true
-}
-
-function websocket_enabled(session_id: string) {
-  return sessions[session_id] && sessions[session_id].websocket_enabled
+function update(id: string, session: Partial<Session>) {
+  const curr_session = sessions[id]
+  sessions[id] = {...curr_session, ...session}
 }
 
 function _delete(id: string) {
@@ -48,7 +28,7 @@ function _delete(id: string) {
   }
 
   const session = sessions[id]
-  const device_id = sessions[id].device_id
+  const device_id = session.device_id
 
   if (session.cursor) {
     session.cursor.close()
@@ -60,9 +40,6 @@ function _delete(id: string) {
 
 export default {
   create,
+  update,
   delete: _delete,
-  enable_websocket,
-  set_cursor,
-  update_device,
-  websocket_enabled,
 }

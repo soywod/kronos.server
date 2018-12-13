@@ -1,90 +1,97 @@
-import * as r from 'rethinkdb'
+import rdb from 'rethinkdb'
 import {v4 as uuid} from 'uuid'
 
-// ------------------------------------------------------------- # Private API #
+import Device from './types/Device'
 
-interface WithDatabase {
-  database: r.Connection
-}
+// ------------------------------------------------------------------ # Create #
 
-interface WithUserId {
+interface CreateParams {
+  database: rdb.Connection
   user_id: string
 }
 
-interface WithDeviceId {
-  device_id: string
-}
-
-interface WithConnected {
-  connected: boolean
-}
-
-type CreateParams = WithDatabase & WithUserId
-type ReadParams = WithDatabase & WithDeviceId
-type ConnectParams = ReadParams
-type DisconnectParams = ReadParams
-type ToggleParams = ReadParams & WithConnected
-
-export interface Device {
-  id: string
-  user_id: string
-  connected: boolean
-}
-
-function toggle(params: ToggleParams) {
-  const {database, device_id, connected} = params
-
-  r.table('device')
-    .get(device_id)
-    .update({connected})
-    .run(database)
-}
-
-// -------------------------------------------------------------- # Public API #
-
-export async function create(params: CreateParams) {
+async function create(params: CreateParams) {
   const {database, user_id} = params
 
   const id = uuid()
   const device = {id, user_id, connected: true}
 
-  const status = await r.table('device')
+  const status = await rdb
+    .table('device')
     .insert(device)
     .run(database)
 
-  if (! status.inserted) {
+  if (!status.inserted) {
     throw new Error('device create')
   }
 
   return id
 }
 
-export async function read(params: ReadParams) {
-  const {database, device_id} = params
+// -------------------------------------------------------------------- # Read #
 
-  const device = await r.table('device')
-    .get(device_id)
-    .run(database) as Device
-
-  if (! device) throw new Error('device not found')
-
-  return device
+interface ReadParams {
+  database: rdb.Connection
+  device_id: string
 }
 
-export async function connect(params: ConnectParams) {
+async function read(params: ReadParams) {
+  const {database, device_id} = params
+
+  const device = await rdb
+    .table('device')
+    .get(device_id)
+    .run(database)
+
+  if (!device) throw new Error('device not found')
+
+  return device as Device
+}
+
+// ------------------------------------------------------ # Connect/disconnect #
+
+interface ToggleParams {
+  database: rdb.Connection
+  device_id: string
+  connected: boolean
+}
+
+function toggle(params: ToggleParams) {
+  const {database, device_id, connected} = params
+
+  rdb
+    .table('device')
+    .get(device_id)
+    .update({connected})
+    .run(database)
+}
+
+interface ConnectParams {
+  database: rdb.Connection
+  device_id: string
+}
+
+async function connect(params: ConnectParams) {
   try {
     const {database, device_id} = params
     await toggle({database, device_id, connected: true})
-  } catch (e) {
+  } catch (_) {
     throw new Error('device connect failed')
   }
 }
 
-export async function disconnect(params: DisconnectParams) {
+interface DisconnectParams {
+  database: rdb.Connection
+  device_id: string
+}
+
+async function disconnect(params: DisconnectParams) {
   try {
     const {database, device_id} = params
     await toggle({database, device_id, connected: false})
-  } catch (e) {
+  } catch (_) {
     throw new Error('device disconnect failed')
   }
 }
+
+export default {connect, create, disconnect, toggle, read}

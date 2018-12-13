@@ -1,141 +1,81 @@
-import * as net from 'net'
-import * as r from 'rethinkdb'
+import net from 'net'
+import rdb from 'rethinkdb'
 
-import {Event as DatabaseEvent} from './database'
-import {Device} from './device'
-import {Task} from './task'
-import {User} from './user'
+import DatabaseEvent from './types/Database'
+import Device from './types/Device'
+import Payload, {
+  PayloadCreate,
+  PayloadDelete,
+  PayloadLogin,
+  PayloadReadAll,
+  PayloadUpdate,
+  PayloadWriteAll,
+} from './types/Payload'
+import Session from './types/Session'
+import SocketData from './types/SocketData'
+import Task from './types/Task'
+import User from './types/User'
 
-import * as $device from './device'
+import $device from './device'
 import $session from './session'
-import * as $task from './task'
-import * as $tcp from './tcp'
-import * as $user from './user'
-import * as $websocket from './websocket'
+import $task from './task'
+import $tcp from './tcp'
+import $user from './user'
+import $ws from './ws'
 
 // ------------------------------------------------------------- # Private API #
 
 const port = (process.env.PORT || 5000) as number
 
-export interface SocketData {
-  database: r.Connection
-  socket: net.Socket
-  session_id: string
-  payload?: string
-}
-
-export type Payload =
-  | PayloadHandshake
-  | PayloadLogin
-  | PayloadReadAll
-  | PayloadWriteAll
-  | PayloadCreate
-  | PayloadUpdate
-  | PayloadDelete
-
-export interface PayloadAuth {
-  user_id: string
-  device_id: string
-}
-
-export interface PayloadHandshake {
-  type: 'handshake'
-  key: string
-}
-
-export interface PayloadLogin {
-  type: 'login'
-  user_id?: string
-  device_id?: string
-}
-
-export type PayloadReadAll = PayloadAuth & {
-  type: 'read-all'
-}
-
-export type PayloadWriteAll = PayloadAuth & {
-  type: 'write-all'
-  tasks: Task[]
-  version: number
-}
-
-export type PayloadCreate = PayloadAuth & {
-  type: 'create'
-  task: Task
-  version: number
-}
-
-export type PayloadUpdate = PayloadAuth & {
-  type: 'update'
-  task: Task
-  version: number
-}
-
-export type PayloadDelete = PayloadAuth & {
-  type: 'delete'
-  task_id: number
-  version: number
-}
-
-interface WatchParams {
-  data: SocketData
-  device: Device
-  user: User
-}
-
-function on_create_server(database: r.Connection) {
+function handleCreateServer(database: rdb.Connection) {
   return (socket: net.Socket) => {
-    const session_id = $session.create()
-    console.log(`New session '${session_id}'`)
+    const session = $session.create()
+    console.log(`New session '${session.id}'`)
 
-    const data: SocketData = {database, socket, session_id}
-    socket.on('data', on_socket_data(data))
-    socket.on('end',  on_socket_end(data))
-    socket.on('error',  async error => {
-      console.log(session_id, 'Error socket!')
-      console.log(error)
-      return on_socket_end(data)
-    })
+    const data: SocketData = {database, socket, session}
+    socket.on('data', handleSocketData(data))
+    socket.on('end', handleSocketEnd(data))
+    socket.on('error', handleSocketEnd(data))
   }
 }
 
-function on_socket_end(data: SocketData) {
-  const {database, session_id} = data
+function handleSocketEnd(data: SocketData) {
+  const {database, session} = data
 
   return async () => {
-    const device_id = $session.delete(session_id)
+    const device_id = $session.delete(session.id)
 
     if (device_id) {
-      console.log(`End session '${session_id}'`)
+      console.log(`End session '${session.id}'`)
       await $device.disconnect({database, device_id})
       console.log(`Disconnect device '${device_id}'`)
     }
   }
 }
 
-function on_socket_data(data: SocketData) {
-  const {socket, session_id} = data
+function handleSocketData(data: SocketData) {
+  const {socket, session} = data
 
   return async (payload: string) => {
-    const params_ = {...data, payload}
+    const params = {...data, payload}
 
     try {
-      await on_socket_data_(params_)
-    } catch (e) {
-      send_error(socket, session_id, e.message)
-      console.warn(e)
+      await _handleSocketData(params)
+    } catch (error) {
+      sendError(socket, session, error.message)
+      console.warn(error)
     }
   }
 }
 
-async function on_socket_data_(data: SocketData) {
-  const {socket, session_id} = data
+async function _handleSocketData(data: SocketData) {
+  const {socket, session} = data
 
-  const payload = parse_payload(data)
-  if (! payload) throw new Error('missing data type')
+  const payload = parsePayload(data)
+  if (!payload) throw new Error('missing data type')
 
   if (payload.type === 'handshake') {
-    $session.enable_websocket(session_id)
+    $session.update(session.id, {mode: 'ws'})
 
     const response = [
       'HTTP/1.1 101 Switching Protocols',
@@ -156,154 +96,164 @@ async function on_socket_data_(data: SocketData) {
 
   switch (payload.type) {
     case 'read-all':
-      return read_all({...data, ...payload})
+      return readAll({...data, ...payload})
     case 'write-all':
-      return write_all({...data, ...payload})
+      return writeAll({...data, ...payload})
     case 'create':
       return create({...data, ...payload})
     case 'update':
       return update({...data, ...payload})
     case 'delete':
-      return delete_({...data, ...payload})
+      return _delete({...data, ...payload})
     default:
       throw new Error('invalid data type')
   }
 }
 
-function parse_payload(data: SocketData) {
-  return ($tcp.parse(data) || $websocket.parse(data)) as Payload | null
+function parsePayload(data: SocketData) {
+  return ($tcp.parse(data) || $ws.parse(data)) as Payload | null
 }
 
 async function login(data: SocketData & PayloadLogin) {
-  const {database, socket, session_id} = data
+  const {database, socket, session} = data
 
-  const user_id = data.user_id || await $user.create({database})
+  const user_id = data.user_id || (await $user.create({database}))
   const user = await $user.read({database, user_id})
 
-  const device_id = data.device_id || await $device.create({database, user_id})
+  const device_id =
+    data.device_id || (await $device.create({database, user_id}))
   const device = await $device.read({database, device_id})
 
   await $device.connect({database, device_id})
-  $session.update_device(session_id, device_id)
+  $session.update(session.id, {device_id})
 
-  send_success(socket, session_id, {
+  sendSuccess(socket, session, {
     device_id,
-    type: 'login',
     user_id,
+    type: 'login',
     version: user.version,
   })
 
   return {user, device}
 }
 
+interface WatchParams {
+  data: SocketData
+  user: User
+  device: Device
+}
+
 async function watch(params: WatchParams) {
   const {device, user} = params
-  const {database, socket, session_id} = params.data
+  const {database, socket, session} = params.data
   const on_change = async (changes: DatabaseEvent) =>
-    send_success(socket, session_id, changes)
+    sendSuccess(socket, session, changes)
 
-  await $task.watch({database, user, device, on_change, session_id})
+  await $task.watch({database, user, device, session, on_change})
 }
 
-async function read_all(data: SocketData & PayloadReadAll) {
-  const {database, socket, session_id, user_id} = data
-  const tasks = await $task.read_all({database, user_id})
-  return send_success(socket, session_id, {type: 'read-all', tasks})
+async function readAll(data: SocketData & PayloadReadAll) {
+  const {database, socket, session, user_id} = data
+  const tasks = await $task.readAll({database, user_id})
+  return sendSuccess(socket, session, {type: 'read-all', tasks})
 }
 
-async function write_all(data: SocketData & PayloadWriteAll) {
+async function writeAll(data: SocketData & PayloadWriteAll) {
   const {database, tasks, version, user_id} = data
-  await $task.write_all({database, user_id, tasks})
-  await $user.update_version({database, user_id, version})
+  await $task.writeAll({database, user_id, tasks})
+  await $user.update({database, user_id, version})
 }
 
 async function create(data: SocketData & PayloadCreate) {
-  const {database, user_id} = data
-  const task = parse_task(data.task)(user_id)
-  await $task.create({database, task, user_id})
-  await $user.update_version(data)
+  const {database} = data
+  const task = parseTask(data.task)
+  await $task.create({database, task})
+  await $user.update(data)
 }
 
 async function update(data: SocketData & PayloadUpdate) {
-  const {database, user_id} = data
-  const task = parse_task(data.task)(user_id)
-  await $task.update({database, task, user_id})
-  await $user.update_version(data)
+  const {database} = data
+  const task = parseTask(data.task)
+  await $task.update({database, task})
+  await $user.update(data)
 }
 
-async function delete_(data: SocketData & PayloadDelete) {
-  const {database, user_id} = data
-  const task_id = parse_task_id(data.task_id)
-  await $task.delete_({database, task_id, user_id})
-  await $user.update_version(data)
+async function _delete(data: SocketData & PayloadDelete) {
+  const {database} = data
+  const task_index = parseTaskIndex(data.task_index)
+  await $task.delete({database, task_index})
+  await $user.update(data)
 }
 
-function parse_task_id(id: any) {
-  if (! id) throw new Error('missing task id')
-  if (typeof id !== 'number') throw new Error('invalid task id')
+function parseTaskIndex(index: any) {
+  if (!index) throw new Error('missing task index')
+  if (typeof index !== 'string') throw new Error('invalid task index')
 
-  return id as number
+  return index as string
 }
 
-function parse_task(task: any) {
-  return (user_id: string) => {
-    if (! task) throw new Error('missing task')
+function parseTask(task: any) {
+  if (!task) throw new Error('missing task')
 
-    parse_task_id(task.id)
+  parseTaskIndex(task.index)
 
-    if (! task.desc) throw new Error('missing task desc')
-    if (typeof task.desc !== 'string') throw new Error('invalid task desc')
+  if (!task.id) throw new Error('missing task id')
+  if (typeof task.id !== 'number') throw new Error('invalid task id')
 
-    if (! task.tags) throw new Error('missing task tags')
-    if (task.tags && ! Array.isArray(task.tags)) throw new Error('invalid task tags')
+  if (!task.desc) throw new Error('missing task desc')
+  if (typeof task.desc !== 'string') throw new Error('invalid task desc')
 
-    if (task.active && typeof task.active !== 'number') throw new Error('invalid task active')
-    if (task.last_active && typeof task.last_active !== 'number') throw new Error('invalid task last_active')
-    if (task.due && typeof task.due !== 'number') throw new Error('invalid task due')
-    if (task.done && typeof task.done !== 'number') throw new Error('invalid task done')
-    if (task.worktime && typeof task.worktime !== 'number') throw new Error('invalid task worktime')
+  if (!task.tags) throw new Error('missing task tags')
+  if (task.tags && !Array.isArray(task.tags))
+    throw new Error('invalid task tags')
 
-    return {
-      ...task,
-      active: task.active || 0,
-      done: task.done || 0,
-      due: task.due || 0,
-      last_active: task.last_active || 0,
-      user_id,
-      worktime: task.worktime || 0,
-    } as Task
-  }
+  if (task.active && typeof task.active !== 'number')
+    throw new Error('invalid task active')
+  if (task.last_active && typeof task.last_active !== 'number')
+    throw new Error('invalid task last_active')
+  if (task.due && typeof task.due !== 'number')
+    throw new Error('invalid task due')
+  if (task.done && typeof task.done !== 'number')
+    throw new Error('invalid task done')
+  if (task.worktime && typeof task.worktime !== 'number')
+    throw new Error('invalid task worktime')
+
+  return {
+    ...task,
+    active: task.active || 0,
+    last_active: task.last_active || 0,
+    due: task.due || 0,
+    done: task.done || 0,
+    worktime: task.worktime || 0,
+  } as Task
 }
 
-function send_success(socket: net.Socket, session_id: string, data: object = {}) {
-  return send(socket, session_id, {success: true, ...data})
+function sendSuccess(socket: net.Socket, session: Session, data: object = {}) {
+  return send(socket, session, {success: true, ...data})
 }
 
-function send_error(socket: net.Socket, session_id: string, error: string) {
-  return send(socket, session_id, {success: false, error})
+function sendError(socket: net.Socket, session: Session, error: string) {
+  return send(socket, session, {success: false, error})
 }
 
-function send(socket: net.Socket, session_id: string, data: object) {
-  const response = $session.websocket_enabled(session_id)
-    ? $websocket.format(data)
-    : $tcp.format(data)
-
+function send(socket: net.Socket, session: Session, data: object) {
+  const response = session.mode === 'ws' ? $ws.format(data) : $tcp.format(data)
   return socket.write(response)
 }
 
-function on_listen() {
+function handleListen() {
   console.log(`Kronos server listening on port ${port}...`)
 }
 
-// -------------------------------------------------------------- # Public API #
+function handleStart(database: rdb.Connection) {
+  const server = net.createServer(handleCreateServer(database))
 
-export function start(database: r.Connection) {
-  const server = net.createServer(on_create_server(database))
-
-  server.on('error', on_error)
-  server.listen(port, on_listen)
+  server.on('error', handleError)
+  server.listen(port, handleListen)
 }
 
-export function on_error(e: Error) {
-  console.error(e)
+function handleError(error: Error) {
+  console.error(error)
 }
+
+export default {handleStart, handleError}

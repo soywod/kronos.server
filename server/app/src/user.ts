@@ -1,65 +1,67 @@
-import * as r from 'rethinkdb'
+import rdb from 'rethinkdb'
 import {v4 as uuid} from 'uuid'
 
-// ------------------------------------------------------------- # Private API #
+import User from './types/User'
 
-interface WithDatabase {
-  database: r.Connection
+// ------------------------------------------------------------------ # Create #
+
+interface CreateParams {
+  database: rdb.Connection
 }
 
-interface WithUserId {
-  user_id: string
-}
-
-interface WithVersion {
-  version: number
-}
-
-type CreateParams = WithDatabase
-type ReadParams = WithDatabase & WithUserId
-type UpdateVersionParams = WithDatabase & WithUserId & WithVersion
-
-export interface User {
-  id: string
-  version: number
-  hide_done: boolean
-  sync_host: string
-}
-
-// -------------------------------------------------------------- # Public API #
-
-export async function create(params: CreateParams) {
+async function create(params: CreateParams) {
   const {database} = params
 
   const id = uuid()
   const user = {id, version: -1}
 
-  const status = await r.table('user').insert(user).run(database)
-  if (! status.inserted) {
+  const status = await rdb
+    .table('user')
+    .insert(user)
+    .run(database)
+  if (!status.inserted) {
     throw new Error('user create failed')
   }
 
   return id
 }
 
-export async function read(params: ReadParams) {
-  const {database, user_id} = params
+// -------------------------------------------------------------------- # Read #
 
-  const user = await r.table('user')
-    .get(user_id)
-    .run(database) as User
-
-  if (! user) throw new Error('user not found')
-
-  return user
+interface ReadParams {
+  database: rdb.Connection
+  user_id: string
 }
 
-export async function update_version(params: UpdateVersionParams) {
+async function read(params: ReadParams) {
+  const {database, user_id} = params
+
+  const user = await rdb
+    .table('user')
+    .get(user_id)
+    .run(database)
+
+  if (!user) throw new Error('user not found')
+
+  return user as User
+}
+
+// ------------------------------------------------------------------ # Update #
+
+interface UpdateParams {
+  database: rdb.Connection
+  user_id: string
+  version: number
+}
+
+async function update(params: UpdateParams) {
   const {database, user_id, version} = params
 
-  await r
+  await rdb
     .table('user')
     .get(user_id)
     .update({version})
     .run(database)
 }
+
+export default {create, read, update}
