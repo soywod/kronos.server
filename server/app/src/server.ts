@@ -207,10 +207,12 @@ function parseTask(task: any) {
   if (task.tags && !Array.isArray(task.tags))
     throw new Error('invalid task tags')
 
+  if (task.start && !Array.isArray(task.start))
+    throw new Error('invalid task start')
+  if (task.stop && !Array.isArray(task.stop))
+    throw new Error('invalid task stop')
   if (task.active && typeof task.active !== 'number')
     throw new Error('invalid task active')
-  if (task.last_active && typeof task.last_active !== 'number')
-    throw new Error('invalid task last_active')
   if (task.due && typeof task.due !== 'number')
     throw new Error('invalid task due')
   if (task.done && typeof task.done !== 'number')
@@ -221,10 +223,10 @@ function parseTask(task: any) {
   return {
     ...task,
     active: task.active || 0,
-    last_active: task.last_active || 0,
+    start: task.start || [],
+    stop: task.stop || [],
     due: task.due || 0,
     done: task.done || 0,
-    worktime: task.worktime || 0,
   } as Task
 }
 

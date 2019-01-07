@@ -3,11 +3,11 @@ interface Task {
   id: number
   desc: string
   tags: string[]
-  active: number
-  last_active: number
+  active: boolean
+  start: number[]
+  stop: number[]
   due: number
   done: number
-  worktime: number
 }
 
 export default Task
