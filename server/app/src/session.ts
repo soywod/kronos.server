@@ -7,7 +7,7 @@ const sessions: Sessions = {}
 function create() {
   const id = uuid()
   const session: Session = {
-    id,
+    id: uuid(),
     device_id: null,
     cursor: null,
     mode: 'tcp',
@@ -15,11 +15,6 @@ function create() {
 
   sessions[id] = session
   return session
-}
-
-function update(id: string, session: Partial<Session>) {
-  const curr_session = sessions[id]
-  sessions[id] = {...curr_session, ...session}
 }
 
 function _delete(id: string) {
@@ -40,6 +35,5 @@ function _delete(id: string) {
 
 export default {
   create,
-  update,
   delete: _delete,
 }

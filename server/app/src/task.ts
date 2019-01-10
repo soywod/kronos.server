@@ -7,8 +7,6 @@ import Session from './types/Session'
 import Task from './types/Task'
 import User from './types/User'
 
-import $session from './session'
-
 const changesOptions = {
   changefeedQueueSize: 100000,
   includeInitial: false,
@@ -151,7 +149,7 @@ async function watch(params: WatchParams) {
 
       cursor.each((error_each, changes) => {
         if (error_each) throw new Error('task watch each cursor failed')
-        $session.update(session.id, {cursor})
+        session.cursor = cursor
         let payload
 
         switch (changes.type) {

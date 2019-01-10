@@ -1,4 +1,8 @@
 import {createHash} from 'crypto'
+import flow from 'lodash/fp/flow'
+import map from 'lodash/fp/map'
+import range from 'lodash/fp/range'
+import toString from 'lodash/fp/toString'
 
 import {PayloadHandshake} from './types/Payload'
 import SocketData from './types/SocketData'
@@ -40,9 +44,37 @@ function parseHttpRequest(data: string) {
   }
 }
 
+function parseFrame(frame: Buffer): [Buffer, Buffer] {
+  const frameLength = frame[1] & 0b01111111
+
+  // frameLength = 127
+  if (frameLength === 0b1111111) {
+    return [frame.slice(8, 12), frame.slice(12)]
+  }
+
+  // frameLength = 126
+  if (frameLength === 0b1111110) {
+    return [frame.slice(4, 8), frame.slice(8)]
+  }
+
+  // frameLength <= 125
+  return [frame.slice(2, 6), frame.slice(6)]
+}
+
+function parsePayload(maskAndPayload: [Buffer, Buffer]) {
+  const [mask, payload] = maskAndPayload
+
+  return flow(
+    range(0),
+    map(bit => payload[bit] ^ mask[bit % 4]),
+    Buffer.from,
+    toString,
+  )(payload.length)
+}
+
 function parse(data: SocketData) {
-  const payload = Buffer.from(data.payload || '')
-  const request = parseHttpRequest(payload.toString())
+  const frame = Buffer.from(data.payload || '')
+  const request = parseHttpRequest(frame.toString())
 
   if (request) {
     const input_key = request.headers['Sec-WebSocket-Key'] as string
@@ -53,20 +85,18 @@ function parse(data: SocketData) {
     return {type: 'handshake', key: output_key} as PayloadHandshake
   }
 
-  const mask = payload.slice(2, 6)
-  const payload_encoded = payload.slice(6)
-  const output = []
-
-  for (let i = 0; i < payload_encoded.length; i++) {
-    output.push(payload_encoded[i] ^ mask[i % 4])
-  }
+  const payload = flow(
+    parseFrame,
+    parsePayload,
+  )(frame)
 
   return $tcp.parse({
     ...data,
-    payload: Buffer.from(output).toString(),
+    payload,
   })
 }
 
+// TODO refactor
 function format(payload: object) {
   const payload_str = $tcp.format(payload)
   const payload_len = payload_str.length

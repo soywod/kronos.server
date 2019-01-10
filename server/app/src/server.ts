@@ -1,5 +1,6 @@
 import net from 'net'
 import rdb from 'rethinkdb'
+import {v4 as uuid} from 'uuid'
 
 import DatabaseEvent from './types/Database'
 import Device from './types/Device'
@@ -17,7 +18,6 @@ import Task from './types/Task'
 import User from './types/User'
 
 import $device from './device'
-import $session from './session'
 import $task from './task'
 import $tcp from './tcp'
 import $user from './user'
@@ -29,7 +29,13 @@ const port = (process.env.PORT || 5000) as number
 
 function handleCreateServer(database: rdb.Connection) {
   return (socket: net.Socket) => {
-    const session = $session.create()
+    const session: Session = {
+      id: uuid(),
+      device_id: null,
+      cursor: null,
+      mode: 'tcp',
+    }
+
     console.log(`New session '${session.id}'`)
 
     const data: SocketData = {database, socket, session}
@@ -43,10 +49,10 @@ function handleSocketEnd(data: SocketData) {
   const {database, session} = data
 
   return async () => {
-    const device_id = $session.delete(session.id)
+    const {id: sessionId, device_id} = session
+    console.log(`End session '${sessionId}'`)
 
     if (device_id) {
-      console.log(`End session '${session.id}'`)
       await $device.disconnect({database, device_id})
       console.log(`Disconnect device '${device_id}'`)
     }
@@ -75,7 +81,7 @@ async function _handleSocketData(data: SocketData) {
   if (!payload) throw new Error('missing data type')
 
   if (payload.type === 'handshake') {
-    $session.update(session.id, {mode: 'ws'})
+    session.mode = 'ws'
 
     const response = [
       'HTTP/1.1 101 Switching Protocols',
@@ -125,7 +131,7 @@ async function login(data: SocketData & PayloadLogin) {
   const device = await $device.read({database, device_id})
 
   await $device.connect({database, device_id})
-  $session.update(session.id, {device_id})
+  session.device_id = device_id
 
   sendSuccess(socket, session, {
     device_id,
