@@ -18,6 +18,7 @@ interface PayloadLogin {
 
 type PayloadReadAll = PayloadAuth & {
   type: 'read-all'
+  version: number
 }
 
 type PayloadWriteAll = PayloadAuth & {

@@ -1,4 +1,3 @@
-import omit from 'lodash/fp/omit'
 import rdb from 'rethinkdb'
 
 import DatabaseEvent from './types/Database'
@@ -27,7 +26,7 @@ async function readAll(params: ReadAllParams) {
   const {database, user_id} = params
   const cursor = await rdb
     .table('task')
-    .filter({user_id})
+    .filter((task: any) => task('index').match(`^${user_id}`))
     .run(database)
   return await cursor.toArray()
 }
@@ -45,7 +44,7 @@ async function writeAll(params: WriteAllParams) {
 
   await rdb
     .table('task')
-    .filter({user_id})
+    .filter((task: any) => task('index').match(`^${user_id}`))
     .delete()
     .run(database)
 
@@ -149,6 +148,7 @@ async function watch(params: WatchParams) {
 
       cursor.each((error_each, changes) => {
         if (error_each) throw new Error('task watch each cursor failed')
+
         session.cursor = cursor
         let payload
 
@@ -157,7 +157,7 @@ async function watch(params: WatchParams) {
             payload = {
               device_id,
               version,
-              task: omit('user_id')(changes.new_val),
+              task: changes.new_val,
             }
             return on_change({type: 'create', ...payload})
 
@@ -165,7 +165,7 @@ async function watch(params: WatchParams) {
             payload = {
               device_id,
               version,
-              task: omit('user_id')(changes.new_val),
+              task: changes.new_val,
             }
             return on_change({type: 'update', ...payload})
 

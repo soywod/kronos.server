@@ -161,7 +161,8 @@ async function watch(params: WatchParams) {
 async function readAll(data: SocketData & PayloadReadAll) {
   const {database, socket, session, user_id} = data
   const tasks = await $task.readAll({database, user_id})
-  return sendSuccess(socket, session, {type: 'read-all', tasks})
+  const version = (await $user.read({database, user_id})).version
+  return sendSuccess(socket, session, {type: 'read-all', tasks, version})
 }
 
 async function writeAll(data: SocketData & PayloadWriteAll) {
