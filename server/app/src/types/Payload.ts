@@ -1,4 +1,4 @@
-import Task from './Task'
+import {Task} from './Task'
 
 interface PayloadAuth {
   user_id: string
@@ -18,7 +18,6 @@ interface PayloadLogin {
 
 type PayloadReadAll = PayloadAuth & {
   type: 'read-all'
-  version: number
 }
 
 type PayloadWriteAll = PayloadAuth & {
@@ -54,8 +53,8 @@ type Payload =
   | PayloadUpdate
   | PayloadWriteAll
 
-export default Payload
 export {
+  Payload,
   PayloadAuth,
   PayloadCreate,
   PayloadDelete,

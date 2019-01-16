@@ -1,4 +1,5 @@
-import Payload, {
+import {
+  Payload,
   PayloadAuth,
   PayloadCreate,
   PayloadDelete,
@@ -7,7 +8,6 @@ import Payload, {
   PayloadUpdate,
   PayloadWriteAll,
 } from './types/Payload'
-import SocketData from './types/SocketData'
 
 function parseAuthPayload(payload: PayloadAuth) {
   const user_id = payload.user_id || ''
@@ -26,9 +26,9 @@ function parsePayload<P extends Payload>(payload: Payload) {
   } as P
 }
 
-function parse(data: SocketData) {
+export function parse(payloadStr: string) {
   try {
-    const payload = JSON.parse(data.payload || '{}') as Payload
+    const payload = JSON.parse(payloadStr || '{}') as Payload
 
     switch (payload.type) {
       case 'login':
@@ -51,12 +51,10 @@ function parse(data: SocketData) {
   }
 }
 
-function format(payload: object) {
+export function format(payload: object) {
   try {
     return JSON.stringify(payload) + '\n'
   } catch (e) {
     return ''
   }
 }
-
-export default {format, parse}

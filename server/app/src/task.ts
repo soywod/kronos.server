@@ -1,10 +1,11 @@
 import rdb from 'rethinkdb'
 
-import DatabaseEvent from './types/Database'
-import Device from './types/Device'
-import Session from './types/Session'
-import Task from './types/Task'
-import User from './types/User'
+import * as $database from './database'
+import * as $session from './session'
+import * as $user from './user'
+
+import {DatabaseEvent} from './types/Database'
+import {Task} from './types/Task'
 
 const changesOptions = {
   changefeedQueueSize: 100000,
@@ -17,167 +18,154 @@ const changesOptions = {
 
 // ---------------------------------------------------------------- # Read all #
 
-interface ReadAllParams {
-  database: rdb.Connection
-  user_id: string
-}
-
-async function readAll(params: ReadAllParams) {
-  const {database, user_id} = params
+export async function readAll(userId: string) {
   const cursor = await rdb
     .table('task')
-    .filter((task: any) => task('index').match(`^${user_id}`))
-    .run(database)
+    .filter((task: any) => task('index').match(`^${userId}#`))
+    .run($database.curr())
+
+  console.log(`Task readAll '${userId}'`)
   return await cursor.toArray()
 }
 
 // --------------------------------------------------------------- # Write all #
 
-interface WriteAllParams {
-  database: rdb.Connection
-  user_id: string
-  tasks: Task[]
-}
-
-async function writeAll(params: WriteAllParams) {
-  const {database, tasks, user_id} = params
-
+export async function writeAll(userId: string, tasks: Task[]) {
   await rdb
     .table('task')
-    .filter((task: any) => task('index').match(`^${user_id}`))
+    .filter((task: any) => task('index').match(`^${userId}`))
     .delete()
-    .run(database)
+    .run($database.curr())
 
   await rdb
     .table('task')
     .insert(tasks)
-    .run(database)
+    .run($database.curr())
+
+  console.log(`Task writeAll '${userId}'`)
 }
 
 // ------------------------------------------------------------------ # Create #
 
-interface CreateParams {
-  database: rdb.Connection
-  task: Task
-}
-
-async function create(params: CreateParams) {
-  const {database, task} = params
-
+export async function create(userId: string, task: Task) {
   try {
     const status = await rdb
       .table('task')
       .insert(task)
-      .run(database)
+      .run($database.curr())
 
-    if (!status.inserted) throw new Error()
+    if (!status.inserted) {
+      throw new Error('task create')
+    }
+
+    console.log(`Task create '${userId}'`)
   } catch (error) {
     console.error(error)
-    throw new Error('task create failed')
+    throw new Error('task create')
   }
 }
 
 // ------------------------------------------------------------------ # Update #
 
-interface UpdateParams {
-  database: rdb.Connection
-  task: Task
-}
-
-async function update(params: UpdateParams) {
-  const {database, task} = params
-
-  const query = rdb.table('task').get(task.index)
-
-  if (!(await query.run(database))) {
-    throw new Error('task not found')
-  }
-
+export async function update(userId: string, task: Task) {
   try {
-    await query.update(task).run(database)
+    const query = rdb.table('task').get(task.index)
+
+    if (!(await query.run($database.curr()))) {
+      throw new Error('task not found')
+    }
+
+    await query.update(task).run($database.curr())
+
+    console.log(`Task update '${userId}'`)
   } catch (e) {
-    throw new Error('task update failed')
+    console.error(e)
+    throw new Error('task update')
   }
 }
 
 // ------------------------------------------------------------------ # Delete #
 
-interface DeleteParams {
-  database: rdb.Connection
-  task_index: string
-}
+export {_delete as delete}
 
-async function _delete(params: DeleteParams) {
-  const {database, task_index} = params
-
-  const query = rdb.table('task').get(task_index)
-
-  if (!(await query.run(database))) {
-    throw new Error('task not found')
-  }
-
+async function _delete(userId: string, task_index: string) {
   try {
-    const status = await query.delete().run(database)
-    if (!status.deleted) throw new Error()
+    const query = rdb.table('task').get(task_index)
+
+    if (!(await query.run($database.curr()))) {
+      throw new Error('task not found')
+    }
+
+    const status = await query.delete().run($database.curr())
+
+    if (!status.deleted) {
+      throw new Error('task delete')
+    }
+
+    console.log(`Task delete '${userId}'`)
   } catch (e) {
-    throw new Error('task delete failed')
+    console.error(e)
+    throw new Error('task delete')
   }
 }
 
 // ------------------------------------------------------------------- # Watch #
 
-interface WatchParams {
-  database: rdb.Connection
-  user: User
-  device: Device
-  session: Session
-  on_change: (changes: DatabaseEvent) => void
-}
+type OnChange = (changes: DatabaseEvent) => void
 
-async function watch(params: WatchParams) {
-  const {database, user, device, on_change, session} = params
-  const {id: user_id, version} = user
-  const {id: device_id} = device
+export async function watch(sessionId: string, handleChange: OnChange) {
+  const device = $session.getDevice(sessionId)
+  const userId = device.user_id
 
   await rdb
     .table('task')
-    .filter((task: any) => task('index').match(`^${user_id}#`))
+    .filter((task: any) => task('index').match(`^${userId}#`))
     .changes(changesOptions)
-    .run(database, (error_run, cursor) => {
-      if (error_run) throw new Error('task watch failed')
+    .run($database.curr(), (runError, cursor) => {
+      if (runError) {
+        console.error(runError)
+        throw new Error('task watch run')
+      }
 
-      cursor.each((error_each, changes) => {
-        if (error_each) throw new Error('task watch each cursor failed')
+      cursor.each(async (eachError, changes) => {
+        if (eachError) {
+          console.error(eachError)
+          throw new Error('task watch each')
+        }
 
-        session.cursor = cursor
-        let payload
+        const version = await $user.getVersion(userId)
+        $session.setCursor(sessionId, cursor)
 
         switch (changes.type) {
           case 'add':
-            payload = {
-              device_id,
-              version,
+            return handleChange({
+              device_id: device.id,
               task: changes.new_val,
-            }
-            return on_change({type: 'create', ...payload})
+              type: 'create',
+              version,
+            })
 
           case 'change':
-            payload = {
-              device_id,
-              version,
+            return handleChange({
+              device_id: device.id,
               task: changes.new_val,
-            }
-            return on_change({type: 'update', ...payload})
+              type: 'update',
+              version,
+            })
 
           case 'remove':
-            payload = {task_index: changes.old_val.index, device_id, version}
-            return on_change({type: 'delete', ...payload})
+            return handleChange({
+              device_id: device.id,
+              task_index: changes.old_val.index,
+              type: 'delete',
+              version,
+            })
 
           default:
             return
         }
       })
     })
-}
 
-export default {create, update, readAll, watch, writeAll, delete: _delete}
+  console.log(`Task watch '${device.id}'`)
+}

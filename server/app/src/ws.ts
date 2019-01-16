@@ -5,9 +5,8 @@ import range from 'lodash/fp/range'
 import toString from 'lodash/fp/toString'
 
 import {PayloadHandshake} from './types/Payload'
-import SocketData from './types/SocketData'
 
-import $tcp from './tcp'
+import * as $tcp from './tcp'
 
 interface Headers {
   [key: string]: string
@@ -72,8 +71,8 @@ function parsePayload(maskAndPayload: [Buffer, Buffer]) {
   )(payload.length)
 }
 
-function parse(data: SocketData) {
-  const frame = Buffer.from(data.payload || '')
+export function parse(payloadStr: string) {
+  const frame = Buffer.from(payloadStr || '')
   const request = parseHttpRequest(frame.toString())
 
   if (request) {
@@ -90,14 +89,11 @@ function parse(data: SocketData) {
     parsePayload,
   )(frame)
 
-  return $tcp.parse({
-    ...data,
-    payload,
-  })
+  return $tcp.parse(payload)
 }
 
 // TODO refactor
-function format(payload: object) {
+export function format(payload: object) {
   const payload_str = $tcp.format(payload)
   const payload_len = payload_str.length
 
@@ -127,5 +123,3 @@ function format(payload: object) {
   const frame_payload = Buffer.from(payload_str)
   return Buffer.concat([frame_header, frame_payload])
 }
-
-export default {format, parse}

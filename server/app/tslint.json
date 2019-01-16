@@ -5,9 +5,8 @@
     "object-literal-sort-keys": [
       true,
       "ignore-case",
-      "locale-compare",
       "match-declaration-order",
-      "shorthand-first"
+      "locale-compare"
     ],
     "trailing-comma": [
       true,

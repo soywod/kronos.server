@@ -4,4 +4,4 @@ interface Device {
   connected: boolean
 }
 
-export default Device
+export {Device}

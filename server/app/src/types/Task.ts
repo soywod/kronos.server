@@ -10,4 +10,4 @@ interface Task {
   done: number
 }
 
-export default Task
+export {Task}

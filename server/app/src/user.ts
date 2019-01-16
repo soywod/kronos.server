@@ -1,67 +1,64 @@
 import rdb from 'rethinkdb'
 import {v4 as uuid} from 'uuid'
 
-import User from './types/User'
+import {User, Users} from './types/User'
+
+import * as $database from './database'
+
+const users: Users = {}
 
 // ------------------------------------------------------------------ # Create #
 
-interface CreateParams {
-  database: rdb.Connection
-}
-
-async function create(params: CreateParams) {
-  const {database} = params
-
+export async function create() {
   const id = uuid()
-  const user = {id, version: -1}
+  const user: User = {id, version: -1}
 
   const status = await rdb
     .table('user')
     .insert(user)
-    .run(database)
+    .run($database.curr())
+
   if (!status.inserted) {
-    throw new Error('user create failed')
+    throw new Error('user create')
   }
 
-  return id
+  return (users[id] = user).id
 }
 
 // -------------------------------------------------------------------- # Read #
 
-interface ReadParams {
-  database: rdb.Connection
-  user_id: string
+export async function read(id: string) {
+  if (users[id]) {
+    return users[id]
+  }
+
+  const user = (await rdb
+    .table('user')
+    .get(id)
+    .run($database.curr())) as User
+
+  if (!user) {
+    throw new Error('user not found')
+  }
+
+  return (users[id] = user)
 }
 
-async function read(params: ReadParams) {
-  const {database, user_id} = params
-
-  const user = await rdb
-    .table('user')
-    .get(user_id)
-    .run(database)
-
-  if (!user) throw new Error('user not found')
-
-  return user as User
+export async function getVersion(id: string) {
+  const user = await read(id)
+  return user.version
 }
 
 // ------------------------------------------------------------------ # Update #
 
-interface UpdateParams {
-  database: rdb.Connection
-  user_id: string
-  version: number
-}
-
-async function update(params: UpdateParams) {
-  const {database, user_id, version} = params
+export async function setVersion(id: string, version: number) {
+  const user = await read(id)
 
   await rdb
     .table('user')
-    .get(user_id)
-    .update({version})
-    .run(database)
-}
+    .get(user.id)
+    .update({version: user.version = version})
+    .run($database.curr())
 
-export default {create, read, update}
+  console.log(`User setVersion ${version} - ${id}`)
+}

@@ -1,7 +1,6 @@
-import $database from './database'
-import $server from './server'
+import {connect} from './database'
+import {handleError, handleStart} from './server'
 
-$database
-  .connect()
-  .then($server.handleStart)
-  .catch($server.handleError)
+connect()
+  .then(handleStart)
+  .catch(handleError)

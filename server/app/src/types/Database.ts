@@ -25,4 +25,4 @@ type DatabaseEvent =
   | DatabaseEventDelete
   | DatabaseEventUpdate
 
-export default DatabaseEvent
+export {DatabaseEvent}
